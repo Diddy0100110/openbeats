@@ -1,26 +1,20 @@
-Store uploads in Postgres, so one credential is enough
+Stop declaring DATABASE_URL in the Blueprint so it can be set in the dashboard
 
-Supabase's Storage API key turned out to be a real obstacle: the dashboard moved
-it, the legacy service_role JWT is deprecated, and the new sb_secret_ keys are
-not JWTs. Since a Postgres DATABASE_URL was already needed for durable metadata,
-the audio can live there too and the second credential disappears entirely.
+The value never reached the app: the boot log kept saying
+"Database : sqlite:////opt/render/project/src/api/data/library.db" and the
+service's Environment page showed the key missing, even though the same edit
+happily deleted DATA_DIR.
 
-- New track_files table (audio + artwork as bytea, one row per track, cascaded on
-  delete). Blobs sit in their own table so listing the library never loads them.
-- Uploads pick a backend automatically: database when Postgres is configured,
-  supabase when a bucket is configured, local otherwise.
-- /api/stream slices the blob server-side with substr(bytea, from, count), so a
-  seek transfers only the requested bytes and still returns 206 + Content-Range.
-  /tracks/{id}/artwork serves the artwork column the same way.
-- GET /api/health and /api/storage/status report the backend, and durability is
-  now simply "not SQLite" — the Settings screen reflects that.
-- POST /api/tracks/purge-demo deletes tracks that stream from a remote URL (the
-  seeded catalogue) and any playlists left empty. Uploads never have a
-  source_url, so they are untouched. SEED_DEMO now defaults to false.
+Cause: a key declared in render.yaml is *managed by the Blueprint*, and Render
+discards values typed into the dashboard for managed keys. `sync: false` only
+prompts during the initial Blueprint creation, so there is no way to supply it
+afterwards — the key was unusable.
 
-Verified against a real Supabase Postgres: seeded 129 demo tracks, uploaded a
-track with cover art, streamed it with a byte range, then deleted the entire
-local data/ directory and restarted. The track still listed, streamed (206,
-0-4095/1523659) and returned its artwork (200 image/jpeg) — so it genuinely
-survives a redeploy. purge-demo then removed the 129 demo tracks and 6 playlists
-while keeping the upload.
+DATABASE_URL is now absent from render.yaml, with a comment explaining why and
+what to set in Dashboard -> service -> Environment. DEPLOY.md step 5.3 documents
+the corrected procedure.
+
+Verified end to end against a real Supabase Postgres beforehand: seeded the
+catalogue, uploaded a track with cover art, streamed a byte range, then deleted
+the whole local data/ directory and restarted — the track still listed, streamed
+(206, 0-4095/1523659) and served its artwork.

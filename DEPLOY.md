@@ -156,13 +156,22 @@ postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.co
 
 ### 5.3 Aplicar no Render
 
-1. No painel do Render: Blueprint **openbeats** → **`Manual sync`**
-2. O Render vai pedir o valor de **`DATABASE_URL`** → cola a linha → confirma
-3. Espera pelo deploy. Nos logs deves ver:
-   ```
-   Database : postgresql+psycopg://postgres...
-   Files    : database
-   ```
+O `DATABASE_URL` **não** está declarado no `render.yaml` de propósito: uma chave listada nesse ficheiro
+é *gerida pelo Blueprint*, e o Render descarta os valores escritos à mão para chaves geridas. Por isso
+ela define-se no painel:
+
+1. Dashboard do Render → o serviço **`openbeats-api`** → **`Environment`**
+2. Clica em **`Edit`** (topo direito da secção *Environment Variables*)
+3. **`+ Add Environment Variable`**
+4. **KEY:** `DATABASE_URL` · **VALUE:** a linha do passo 5.2
+5. **`Save Changes`** → o Render faz o deploy
+
+Confirma no log de arranque:
+
+```
+Database : postgresql+psycopg://postgres...
+Files    : database
+```
 
 A partir daí **os uploads sobrevivem a todos os deploys**.
 

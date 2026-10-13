@@ -28,14 +28,19 @@ services:
       - key: PYTHON_VERSION
         value: "3.12.10"
       # --- Durable storage ---------------------------------------------------
-      # One value is enough: with a Postgres database, uploads (audio + cover art)
-      # are stored inside it and survive every deploy. `sync: false` makes Render
-      # prompt for the value instead of keeping it in this public repository.
-      - key: DATABASE_URL
-        sync: false
-      # Optional: a Supabase Storage bucket instead of blobs in the database.
-      # Roomier (1 GB vs 500 MB) and served from Supabase's CDN. Leave unset to
-      # keep everything in Postgres.
+      # DATABASE_URL is deliberately NOT declared here. A key listed in this file
+      # is *managed by the Blueprint*, and Render discards values typed into the
+      # Environment page for managed keys — which makes the dashboard unable to
+      # set it. Leaving it out means the value you paste in
+      # Dashboard → your service → Environment is the one that sticks.
+      #
+      # Set it there to a Supabase "Session pooler" URI, e.g.
+      #   postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+      # With that in place, uploaded audio and cover art are stored in Postgres
+      # and survive every deploy. See DEPLOY.md, step 5.
+      #
+      # Optional: a Supabase Storage bucket instead of blobs in the database
+      # (roomier, served from Supabase's CDN). Uncomment to opt in.
       # - key: SUPABASE_URL
       #   sync: false
       # - key: SUPABASE_SERVICE_KEY
@@ -43,11 +48,8 @@ services:
       # - key: SUPABASE_BUCKET
       #   value: openbeats
       #
-      # NOTE: DATA_DIR is deliberately *not* set. On the free plan /data does not
-      # exist and is not writable, so the app uses a directory inside the project
-      # as a scratch area.
-      # - key: DATA_DIR
-      #   value: /data
+      # NOTE: DATA_DIR is also intentionally absent — on the free plan /data is
+      # not writable, so the app uses a scratch directory inside the project.
       #
       # The demo catalogue is off: this is an upload-only library.
       - key: SEED_DEMO
