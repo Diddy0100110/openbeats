@@ -3,15 +3,15 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 
 import { CoverArt } from '@/components/CoverArt';
 import { Icon } from '@/components/Icon';
-import { MINI_PLAYER_HEIGHT, Spacing } from '@/constants/theme';
+import { MINI_PLAYER_HEIGHT, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { usePlayer } from '@/state/player';
 
-/** The always-present playback bar that floats above the tab bar. */
+/** Compact playback bar pinned to the bottom, as in the reference design. */
 export function MiniPlayer() {
   const theme = useTheme();
   const router = useRouter();
-  const { currentTrack, isPlaying, isBuffering, progress, toggle, next } = usePlayer();
+  const { currentTrack, isPlaying, isBuffering, progress, toggle, next, previous } = usePlayer();
 
   if (!currentTrack) return null;
 
@@ -20,12 +20,16 @@ export function MiniPlayer() {
       accessibilityRole="button"
       accessibilityLabel={`Now playing: ${currentTrack.title} by ${currentTrack.artist}`}
       onPress={() => router.push('/player')}
-      style={[
+      style={({ pressed }) => [
         styles.root,
-        { backgroundColor: theme.surfaceHigh, borderColor: theme.border },
+        {
+          backgroundColor: theme.surface,
+          borderColor: theme.border,
+          shadowColor: '#101024',
+        },
+        pressed && styles.pressed,
       ]}>
-      {/* Thin progress indicator pinned to the top edge. */}
-      <View style={[styles.progressTrack, { backgroundColor: theme.border }]}>
+      <View style={[styles.progressTrack, { backgroundColor: theme.surfaceHigh }]}>
         <View
           style={[
             styles.progressFill,
@@ -34,57 +38,72 @@ export function MiniPlayer() {
         />
       </View>
 
-      <View style={styles.body}>
-        <CoverArt track={currentTrack} size={42} />
+      <CoverArt track={currentTrack} size={44} />
 
-        <View style={styles.text}>
-          <Text numberOfLines={1} style={[styles.title, { color: theme.text }]}>
-            {currentTrack.title}
-          </Text>
-          <Text numberOfLines={1} style={[styles.artist, { color: theme.textSecondary }]}>
-            {currentTrack.artist}
-          </Text>
-        </View>
-
-        {isBuffering ? (
-          <ActivityIndicator size="small" color={theme.textSecondary} />
-        ) : (
-          <Pressable
-            hitSlop={10}
-            accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
-            onPress={(event) => {
-              event.stopPropagation?.();
-              toggle();
-            }}
-            style={styles.button}>
-            <Icon name={isPlaying ? 'pause' : 'play'} size={24} />
-          </Pressable>
-        )}
-
-        <Pressable
-          hitSlop={10}
-          accessibilityLabel="Next track"
-          onPress={(event) => {
-            event.stopPropagation?.();
-            next();
-          }}
-          style={styles.button}>
-          <Icon name="play-skip-forward" size={20} />
-        </Pressable>
+      <View style={styles.text}>
+        <Text numberOfLines={1} style={[styles.title, { color: theme.text }]}>
+          {currentTrack.title}
+        </Text>
+        <Text numberOfLines={1} style={[styles.artist, { color: theme.textSecondary }]}>
+          {currentTrack.artist}
+        </Text>
       </View>
+
+      <Pressable
+        hitSlop={8}
+        accessibilityLabel="Previous track"
+        onPress={(event) => {
+          event.stopPropagation?.();
+          previous();
+        }}
+        style={styles.button}>
+        <Icon name="play-skip-back" size={20} />
+      </Pressable>
+
+      <Pressable
+        hitSlop={8}
+        accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+        onPress={(event) => {
+          event.stopPropagation?.();
+          toggle();
+        }}
+        style={[styles.playButton, { backgroundColor: theme.primary }]}>
+        {isBuffering ? (
+          <ActivityIndicator size="small" color={theme.onPrimary} />
+        ) : (
+          <Icon name={isPlaying ? 'pause' : 'play'} size={18} color={theme.onPrimary} />
+        )}
+      </Pressable>
+
+      <Pressable
+        hitSlop={8}
+        accessibilityLabel="Next track"
+        onPress={(event) => {
+          event.stopPropagation?.();
+          next();
+        }}
+        style={styles.button}>
+        <Icon name="play-skip-forward" size={20} />
+      </Pressable>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
     height: MINI_PLAYER_HEIGHT,
-    marginHorizontal: Spacing.sm,
-    marginBottom: Spacing.xs,
-    borderRadius: 14,
+    marginHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    justifyContent: 'center',
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
   },
   progressTrack: {
     position: 'absolute',
@@ -96,20 +115,14 @@ const styles = StyleSheet.create({
   progressFill: {
     height: 2,
   },
-  body: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.sm,
-  },
   text: {
     flex: 1,
     minWidth: 0,
+    marginLeft: Spacing.xs,
   },
   title: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   artist: {
     fontSize: 12,
@@ -117,5 +130,15 @@ const styles = StyleSheet.create({
   },
   button: {
     padding: Spacing.xs,
+  },
+  playButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: {
+    opacity: 0.85,
   },
 });

@@ -1,9 +1,10 @@
 import { useColorScheme } from 'react-native';
 
-import { Colors, type ThemeColors } from '@/constants/theme';
+import { Colors, LOCKED_SCHEME, type ThemeColors } from '@/constants/theme';
 
-/** Resolves the active colour palette from the system appearance. */
+/** Resolves the active colour palette. */
 export function useTheme(): ThemeColors {
   const scheme = useColorScheme();
-  return scheme === 'light' ? Colors.light : Colors.dark;
+  const resolved = LOCKED_SCHEME ?? (scheme === 'light' ? 'light' : 'dark');
+  return Colors[resolved];
 }

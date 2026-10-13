@@ -10,7 +10,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
 import { Icon } from '@/components/Icon';
@@ -18,7 +17,8 @@ import { PlaylistCard } from '@/components/PlaylistCard';
 import { Screen, useBottomSpace } from '@/components/Screen';
 import { SectionHeader } from '@/components/SectionHeader';
 import { TrackRow } from '@/components/TrackRow';
-import { Radius, Spacing } from '@/constants/theme';import { useTheme } from '@/hooks/useTheme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { formatCount, formatLongDuration, pluralise } from '@/lib/format';
 import { useFavorites } from '@/state/favorites';
 import { useLibrary } from '@/state/library';
@@ -29,7 +29,6 @@ import type { Track } from '@/api/client';
 export default function HomeScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const bottom = useBottomSpace(Spacing.lg);
 
   const library = useLibrary();
@@ -42,14 +41,12 @@ export default function HomeScreen() {
       favorites.recentIds
         .map((id) => library.trackMap.get(id))
         .filter((track): track is Track => Boolean(track))
-        .slice(0, 12),
+        .slice(0, 8),
     [favorites.recentIds, library.trackMap],
   );
 
   const isEmpty = !library.tracks.length;
   const isLoading = library.status === 'loading' && isEmpty;
-
-  const playAllSongs = () => player.playQueue(library.tracks, 0);
 
   const shuffleAll = () => {
     const shuffled = [...library.tracks];
@@ -62,50 +59,68 @@ export default function HomeScreen() {
 
   const header = (
     <View>
-      <View style={[styles.hero, { paddingTop: insets.top + Spacing.lg }]}>
-        <View style={styles.brandRow}>
-          <Text style={[styles.brand, { color: theme.text }]}>
-            Open<Text style={{ color: theme.primary }}>Beats</Text>
-          </Text>
-          <Pressable
-            onPress={() => router.push('/settings')}
-            hitSlop={12}
-            accessibilityLabel="Settings"
-            style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}>
-            <Icon name="settings-outline" size={20} muted />
-          </Pressable>
-        </View>
-        <Text style={[styles.tagline, { color: theme.textSecondary }]}>
-          {library.stats
-            ? `${pluralise(library.stats.tracks, 'track')} · ${pluralise(library.stats.albums, 'album')} · ${formatLongDuration(library.stats.total_duration)}`
-            : 'Your shared music library'}
+      <View style={styles.brandRow}>
+        <Text style={[styles.brand, { color: theme.text }]}>
+          Open<Text style={{ color: theme.primary }}>Beats</Text>
         </Text>
-
-        <View style={styles.heroActions}>
-          <Pressable
-            onPress={shuffleAll}
-            disabled={isEmpty}
-            style={({ pressed }) => [
-              styles.primaryButton,
-              { backgroundColor: theme.primary, opacity: isEmpty ? 0.5 : 1 },
-              pressed && styles.pressed,
-            ]}>
-            <Icon name="shuffle" size={18} color={theme.onPrimary} />
-            <Text style={[styles.primaryButtonText, { color: theme.onPrimary }]}>Shuffle all</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => router.push('/upload')}
-            style={({ pressed }) => [
-              styles.ghostButton,
-              { borderColor: theme.border, backgroundColor: theme.surface },
-              pressed && styles.pressed,
-            ]}>
-            <Icon name="cloud-upload-outline" size={18} />
-            <Text style={[styles.ghostButtonText, { color: theme.text }]}>Upload</Text>
-          </Pressable>
-        </View>
+        <Pressable
+          onPress={() => router.push('/settings')}
+          hitSlop={12}
+          accessibilityLabel="Settings"
+          style={({ pressed }) => [
+            styles.settingsButton,
+            { backgroundColor: theme.primarySoft },
+            pressed && styles.pressed,
+          ]}>
+          <Icon name="settings-outline" size={19} color={theme.primary} />
+        </Pressable>
       </View>
+
+      {/* Search shortcut, mirroring the search field in the reference design. */}
+      <Pressable
+        onPress={() => router.push('/search')}
+        style={({ pressed }) => [
+          styles.searchField,
+          { backgroundColor: theme.surfaceHigh, borderColor: theme.border },
+          pressed && styles.pressed,
+        ]}>
+        <Icon name="search" size={18} color={theme.textMuted} />
+        <Text style={[styles.searchText, { color: theme.textMuted }]}>
+          Song, artist, album…
+        </Text>
+      </Pressable>
+
+      <View style={styles.actionRow}>
+        <Pressable
+          onPress={shuffleAll}
+          disabled={isEmpty}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            { backgroundColor: theme.primary, opacity: isEmpty ? 0.45 : 1 },
+            pressed && styles.pressed,
+          ]}>
+          <Icon name="shuffle" size={17} color={theme.onPrimary} />
+          <Text style={[styles.primaryButtonText, { color: theme.onPrimary }]}>Shuffle all</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => router.push('/upload')}
+          style={({ pressed }) => [
+            styles.ghostButton,
+            { borderColor: theme.border, backgroundColor: theme.surface },
+            pressed && styles.pressed,
+          ]}>
+          <Icon name="cloud-upload-outline" size={17} />
+          <Text style={[styles.ghostButtonText, { color: theme.text }]}>Upload</Text>
+        </Pressable>
+      </View>
+
+      {library.stats ? (
+        <Text style={[styles.stats, { color: theme.textMuted }]}>
+          {pluralise(library.stats.tracks, 'track')} · {pluralise(library.stats.albums, 'album')} ·{' '}
+          {formatLongDuration(library.stats.total_duration)}
+        </Text>
+      ) : null}
 
       {recentTracks.length ? (
         <>
@@ -113,11 +128,12 @@ export default function HomeScreen() {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalList}>
+            contentContainerStyle={styles.horizontal}>
             {recentTracks.map((track) => (
               <View key={track.id} style={styles.recentCard}>
                 <TrackRow
                   track={track}
+                  showDuration={false}
                   active={player.currentTrack?.id === track.id}
                   playing={player.isPlaying}
                   onPress={() => player.playTrack(track, recentTracks)}
@@ -135,18 +151,18 @@ export default function HomeScreen() {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipRow}>
+            contentContainerStyle={styles.horizontal}>
             {library.facets.genres.map((genre) => (
               <Pressable
                 key={genre.name}
                 onPress={() => router.push({ pathname: '/search', params: { genre: genre.name } })}
                 style={({ pressed }) => [
                   styles.chip,
-                  { backgroundColor: theme.surfaceHigh, borderColor: theme.border },
+                  { backgroundColor: theme.primarySoft },
                   pressed && styles.pressed,
                 ]}>
-                <Text style={[styles.chipText, { color: theme.text }]}>{genre.name}</Text>
-                <Text style={[styles.chipCount, { color: theme.textMuted }]}>
+                <Text style={[styles.chipText, { color: theme.primary }]}>{genre.name}</Text>
+                <Text style={[styles.chipCount, { color: theme.primary }]}>
                   {genre.track_count}
                 </Text>
               </Pressable>
@@ -158,21 +174,20 @@ export default function HomeScreen() {
       {library.playlists.length ? (
         <>
           <SectionHeader
-            title="Your playlists"
+            title="Playlists"
             actionLabel="See all"
             onAction={() => router.push('/playlists')}
           />
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalList}>
-            {library.playlists.slice(0, 10).map((playlist) => (
+            contentContainerStyle={styles.horizontal}>
+            {library.playlists.slice(0, 8).map((playlist) => (
               <PlaylistCard
                 key={playlist.id}
                 playlist={playlist}
-                size={140}
+                size={132}
                 onPress={() => router.push(`/playlist/${playlist.id}`)}
-                onLongPress={() => router.push(`/playlist/${playlist.id}`)}
               />
             ))}
           </ScrollView>
@@ -181,8 +196,6 @@ export default function HomeScreen() {
 
       <SectionHeader
         title={isEmpty ? 'Library' : `All songs (${formatCount(library.tracks.length)})`}
-        actionLabel={isEmpty || !library.tracks.length ? undefined : 'Play'}
-        onAction={library.tracks.length ? playAllSongs : undefined}
       />
     </View>
   );
@@ -222,15 +235,11 @@ export default function HomeScreen() {
             />
           )
         }
-        renderItem={({ item, index }) => (
+        renderItem={({ item }) => (
           <TrackRow
-            index={index}
             track={item}
             active={player.currentTrack?.id === item.id}
             playing={player.isPlaying}
-            showFavorite
-            isFavorite={favorites.isFavorite(item.id)}
-            onToggleFavorite={() => favorites.toggleFavorite(item.id)}
             onPress={() => player.playTrack(item, library.tracks)}
             onLongPress={() => openTrackActions(item)}
             onMenu={() => openTrackActions(item)}
@@ -242,30 +251,43 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  hero: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.sm,
-    gap: Spacing.xs,
-  },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  settingsButton: {
-    padding: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
   },
   brand: {
-    fontSize: 34,
+    fontSize: 25,
     fontWeight: '800',
-    letterSpacing: -0.8,
+    letterSpacing: -0.6,
   },
-  tagline: {
-    fontSize: 13.5,
+  settingsButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  heroActions: {
+  searchField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    height: 46,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  searchText: {
+    fontSize: 15,
+  },
+  actionRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
     marginTop: Spacing.md,
   },
   primaryButton: {
@@ -273,11 +295,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
     paddingHorizontal: Spacing.lg,
-    height: 44,
+    height: 42,
     borderRadius: Radius.pill,
   },
   primaryButtonText: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '700',
   },
   ghostButton: {
@@ -285,35 +307,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
     paddingHorizontal: Spacing.lg,
-    height: 44,
+    height: 42,
     borderRadius: Radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
   },
   ghostButtonText: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '600',
   },
-  horizontalList: {
+  stats: {
+    fontSize: 12.5,
+    paddingHorizontal: Spacing.lg,
+    marginTop: Spacing.md,
+  },
+  horizontal: {
     gap: Spacing.md,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.xs,
   },
   recentCard: {
-    width: 280,
-  },
-  chipRow: {
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.xs,
+    width: 268,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
     paddingHorizontal: Spacing.lg,
-    height: 38,
+    height: 36,
     borderRadius: Radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   chipText: {
     fontSize: 14,
@@ -321,6 +342,7 @@ const styles = StyleSheet.create({
   },
   chipCount: {
     fontSize: 12,
+    opacity: 0.7,
   },
   loader: {
     marginTop: Spacing.xxxl,

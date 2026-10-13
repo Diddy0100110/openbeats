@@ -1,18 +1,18 @@
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { MAX_CONTENT_WIDTH, MINI_PLAYER_HEIGHT, TAB_BAR_HEIGHT } from '@/constants/theme';
+import { MAX_CONTENT_WIDTH, MINI_PLAYER_HEIGHT } from '@/constants/theme';
 import { usePlayer } from '@/state/player';
 
 /**
- * Space that the floating tab bar + mini player occupy at the bottom of the
- * viewport. Lists put this in `contentContainerStyle.paddingBottom` so the last
- * row is never hidden; plain screens use it as ordinary padding.
+ * Space the floating mini player occupies at the bottom of the viewport. Lists
+ * put this in `contentContainerStyle.paddingBottom` so the last row is never
+ * hidden; plain screens use it as ordinary padding.
  */
 export function useBottomSpace(extra = 0): number {
   const insets = useSafeAreaInsets();
   const { currentTrack } = usePlayer();
-  return TAB_BAR_HEIGHT + (currentTrack ? MINI_PLAYER_HEIGHT : 0) + insets.bottom + extra;
+  return (currentTrack ? MINI_PLAYER_HEIGHT + 14 : 0) + insets.bottom + extra;
 }
 
 type Props = {

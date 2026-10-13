@@ -245,7 +245,6 @@ export default function PlaylistDetailScreen() {
         }
         renderItem={({ item, index }) => (
           <TrackRow
-            index={index}
             track={item}
             active={player.currentTrack?.id === item.id}
             playing={player.isPlaying}

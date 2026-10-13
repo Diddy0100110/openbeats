@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
 import { Icon } from '@/components/Icon';
@@ -21,7 +20,6 @@ type Tab = 'favorites' | 'recent';
 export default function FavoritesScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const bottom = useBottomSpace(Spacing.lg);
 
   const library = useLibrary();
@@ -50,63 +48,64 @@ export default function FavoritesScreen() {
   const data = tab === 'favorites' ? favoriteTracks : recentTracks;
   const clearCurrent = tab === 'favorites' ? favorites.clearFavorites : favorites.clearRecent;
 
+  const header = (
+    <View style={styles.header}>
+      <Text style={[styles.title, { color: theme.text }]}>Favourites</Text>
+      <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+        Saved on this device only · {pluralise(data.length, 'track')}
+      </Text>
+
+      <View style={styles.tabRow}>
+        {(
+          [
+            { key: 'favorites' as Tab, label: 'Favourites', icon: 'heart' as const },
+            { key: 'recent' as Tab, label: 'Recently played', icon: 'time' as const },
+          ]
+        ).map((item) => {
+          const active = tab === item.key;
+          return (
+            <Pressable
+              key={item.key}
+              onPress={() => setTab(item.key)}
+              style={[
+                styles.tab,
+                { backgroundColor: active ? theme.primary : theme.primarySoft },
+              ]}>
+              <Icon
+                name={item.icon}
+                size={15}
+                color={active ? theme.onPrimary : theme.primary}
+              />
+              <Text
+                style={[styles.tabText, { color: active ? theme.onPrimary : theme.primary }]}>
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+
+        {data.length ? (
+          <Pressable onPress={clearCurrent} style={styles.clear}>
+            <Text style={[styles.clearText, { color: theme.textMuted }]}>Clear</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+
   return (
     <Screen padBottom={false}>
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }]}>
-        <Text style={[styles.title, { color: theme.text }]}>Your music</Text>
-        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-          Saved on this device only Â· {pluralise(data.length, 'track')}
-        </Text>
-
-        <View style={styles.tabRow}>
-          {(
-            [
-              { key: 'favorites' as Tab, label: 'Favourites', icon: 'heart' as const },
-              { key: 'recent' as Tab, label: 'Recently played', icon: 'time' as const },
-            ]
-          ).map((item) => {
-            const active = tab === item.key;
-            return (
-              <Pressable
-                key={item.key}
-                onPress={() => setTab(item.key)}
-                style={[
-                  styles.tab,
-                  {
-                    backgroundColor: active ? theme.primary : theme.surfaceHigh,
-                    borderColor: active ? theme.primary : theme.border,
-                  },
-                ]}>
-                <Icon
-                  name={item.icon}
-                  size={15}
-                  color={active ? theme.onPrimary : theme.textSecondary}
-                />
-                <Text style={[styles.tabText, { color: active ? theme.onPrimary : theme.text }]}>
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-
-          {data.length ? (
-            <Pressable onPress={clearCurrent} style={styles.clear}>
-              <Text style={[styles.clearText, { color: theme.textMuted }]}>Clear</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
-
       <FlatList
         data={data}
         keyExtractor={(track) => String(track.id)}
+        ListHeaderComponent={header}
         contentContainerStyle={{ paddingBottom: bottom }}
         ListEmptyComponent={
           tab === 'favorites' ? (
             <EmptyState
               icon="heart-outline"
               title="No favourites yet"
-              message="Tap the heart on any track and it will show up here â€” privately, on this device."
+              message="Tap the + on any track and add it to your favourites — privately, on this device."
               actionLabel="Browse the library"
               onAction={() => router.push('/')}
             />
@@ -118,15 +117,11 @@ export default function FavoritesScreen() {
             />
           )
         }
-        renderItem={({ item, index }) => (
+        renderItem={({ item }) => (
           <TrackRow
-            index={index}
             track={item}
             active={player.currentTrack?.id === item.id}
             playing={player.isPlaying}
-            showFavorite
-            isFavorite={favorites.isFavorite(item.id)}
-            onToggleFavorite={() => favorites.toggleFavorite(item.id)}
             onPress={() => player.playTrack(item, data)}
             onLongPress={() => openTrackActions(item)}
             onMenu={() => openTrackActions(item)}
@@ -140,11 +135,12 @@ export default function FavoritesScreen() {
 const styles = StyleSheet.create({
   header: {
     paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
     paddingBottom: Spacing.sm,
     gap: Spacing.xs,
   },
   title: {
-    fontSize: 30,
+    fontSize: 25,
     fontWeight: '800',
     letterSpacing: -0.6,
   },
@@ -162,12 +158,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
     paddingHorizontal: Spacing.lg,
-    height: 36,
+    height: 34,
     borderRadius: Radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '600',
   },
   clear: {

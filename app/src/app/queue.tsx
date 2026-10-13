@@ -68,7 +68,6 @@ export default function QueueScreen() {
         }
         renderItem={({ item, index }) => (
           <TrackRow
-            index={index}
             track={item}
             active={index === player.currentIndex}
             playing={player.isPlaying}

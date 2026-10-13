@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState } from '@/components/EmptyState';
 import { Icon } from '@/components/Icon';
@@ -11,7 +11,6 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useTheme } from '@/hooks/useTheme';
 import { formatLongDuration, pluralise } from '@/lib/format';
-import { useFavorites } from '@/state/favorites';
 import { useLibrary } from '@/state/library';
 import { useOverlays } from '@/state/overlays';
 import { usePlayer } from '@/state/player';
@@ -21,13 +20,11 @@ type Mode = 'songs' | 'artists' | 'albums';
 
 export default function SearchScreen() {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const bottom = useBottomSpace(Spacing.lg);
   const params = useLocalSearchParams<{ genre?: string }>();
 
   const library = useLibrary();
   const player = usePlayer();
-  const favorites = useFavorites();
   const { openTrackActions } = useOverlays();
 
   const [query, setQuery] = useState('');
@@ -82,7 +79,6 @@ export default function SearchScreen() {
   }, [results, mode]);
 
   const searching = Boolean(debouncedQuery.trim()) || Boolean(genre);
-  const activeCount = results.length;
 
   const modes: { key: Mode; label: string }[] = [
     { key: 'songs', label: 'Songs' },
@@ -90,27 +86,25 @@ export default function SearchScreen() {
     { key: 'albums', label: 'Albums' },
   ];
 
-  return (
-    <Screen padBottom={false}>
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }]}>
-        <Text style={[styles.title, { color: theme.text }]}>Search</Text>
+  const header = (
+    <View style={styles.header}>
+      <Input
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Song, artist, album…"
+        autoCorrect={false}
+        returnKeyType="search"
+        leading={<Icon name="search" size={18} color={theme.textMuted} />}
+        trailing={
+          query ? (
+            <Pressable onPress={() => setQuery('')} hitSlop={8}>
+              <Icon name="close-circle" size={18} color={theme.textMuted} />
+            </Pressable>
+          ) : null
+        }
+      />
 
-        <Input
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Songs, artists, albumsâ€¦"
-          autoCorrect={false}
-          returnKeyType="search"
-          leading={<Icon name="search" size={18} color={theme.textMuted} />}
-          trailing={
-            query ? (
-              <Pressable onPress={() => setQuery('')} hitSlop={8}>
-                <Icon name="close-circle" size={18} color={theme.textMuted} />
-              </Pressable>
-            ) : null
-          }
-        />
-
+      {library.facets.genres.length ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -123,55 +117,53 @@ export default function SearchScreen() {
                 onPress={() => setGenre(active ? null : item.name)}
                 style={[
                   styles.chip,
-                  {
-                    backgroundColor: active ? theme.primary : theme.surfaceHigh,
-                    borderColor: active ? theme.primary : theme.border,
-                  },
+                  { backgroundColor: active ? theme.primary : theme.primarySoft },
                 ]}>
                 <Text
-                  style={[styles.chipText, { color: active ? theme.onPrimary : theme.text }]}>
+                  style={[styles.chipText, { color: active ? theme.onPrimary : theme.primary }]}>
                   {item.name}
                 </Text>
               </Pressable>
             );
           })}
         </ScrollView>
+      ) : null}
 
-        <View style={styles.modeRow}>
-          {modes.map((item) => {
-            const active = mode === item.key;
-            return (
-              <Pressable
-                key={item.key}
-                onPress={() => setMode(item.key)}
-                style={[
-                  styles.mode,
-                  { backgroundColor: active ? theme.surfaceHigh : 'transparent' },
-                ]}>
-                <Text
-                  style={[
-                    styles.modeText,
-                    { color: active ? theme.text : theme.textSecondary },
-                  ]}>
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+      <View style={styles.modeRow}>
+        {modes.map((item) => {
+          const active = mode === item.key;
+          return (
+            <Pressable
+              key={item.key}
+              onPress={() => setMode(item.key)}
+              style={[
+                styles.mode,
+                { backgroundColor: active ? theme.surfaceHigh : 'transparent' },
+              ]}>
+              <Text
+                style={[styles.modeText, { color: active ? theme.text : theme.textMuted }]}>
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
 
         {searching ? (
-          <Text style={[styles.summary, { color: theme.textSecondary }]}>
-            {pluralise(activeCount, 'result')}
-            {genre ? ` in ${genre}` : ''}
+          <Text style={[styles.summary, { color: theme.textMuted }]}>
+            {pluralise(results.length, 'result')}
           </Text>
         ) : null}
       </View>
+    </View>
+  );
 
+  return (
+    <Screen padBottom={false}>
       {mode === 'songs' ? (
         <FlatList
           data={results}
           keyExtractor={(track) => String(track.id)}
+          ListHeaderComponent={header}
           contentContainerStyle={{ paddingBottom: bottom }}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
@@ -189,15 +181,11 @@ export default function SearchScreen() {
               />
             )
           }
-          renderItem={({ item, index }) => (
+          renderItem={({ item }) => (
             <TrackRow
-              index={index}
               track={item}
               active={player.currentTrack?.id === item.id}
               playing={player.isPlaying}
-              showFavorite
-              isFavorite={favorites.isFavorite(item.id)}
-              onToggleFavorite={() => favorites.toggleFavorite(item.id)}
               onPress={() => player.playTrack(item, results)}
               onLongPress={() => openTrackActions(item)}
               onMenu={() => openTrackActions(item)}
@@ -208,7 +196,9 @@ export default function SearchScreen() {
         <FlatList
           data={grouped ?? []}
           keyExtractor={(group) => group.name}
+          ListHeaderComponent={header}
           contentContainerStyle={{ paddingBottom: bottom }}
+          keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
             <EmptyState
               icon="albums-outline"
@@ -222,17 +212,21 @@ export default function SearchScreen() {
               style={({ pressed }) => [
                 styles.groupRow,
                 { borderBottomColor: theme.border },
-                pressed && { backgroundColor: theme.surfacePressed },
+                pressed && { backgroundColor: theme.surfaceHigh },
               ]}>
-              <View style={[styles.groupIcon, { backgroundColor: theme.surfaceHigh }]}>
-                <Icon name={mode === 'artists' ? 'person' : 'disc'} size={20} muted />
+              <View style={[styles.groupIcon, { backgroundColor: theme.primarySoft }]}>
+                <Icon
+                  name={mode === 'artists' ? 'person' : 'disc'}
+                  size={19}
+                  color={theme.primary}
+                />
               </View>
               <View style={styles.groupText}>
                 <Text numberOfLines={1} style={[styles.groupName, { color: theme.text }]}>
                   {item.name}
                 </Text>
                 <Text style={[styles.groupMeta, { color: theme.textSecondary }]}>
-                  {pluralise(item.tracks.length, 'track')} Â· {formatLongDuration(item.duration)}
+                  {pluralise(item.tracks.length, 'track')} · {formatLongDuration(item.duration)}
                 </Text>
               </View>
               <Icon name="play-circle-outline" size={24} color={theme.primary} />
@@ -247,13 +241,9 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   header: {
     paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
     paddingBottom: Spacing.sm,
     gap: Spacing.md,
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: '800',
-    letterSpacing: -0.6,
   },
   chipRow: {
     gap: Spacing.sm,
@@ -263,7 +253,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     height: 34,
     borderRadius: Radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -273,6 +262,7 @@ const styles = StyleSheet.create({
   },
   modeRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.xs,
   },
   mode: {
@@ -285,8 +275,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   summary: {
+    marginLeft: 'auto',
     fontSize: 12.5,
-    marginTop: -Spacing.xs,
   },
   groupRow: {
     flexDirection: 'row',
@@ -309,7 +299,7 @@ const styles = StyleSheet.create({
   },
   groupName: {
     fontSize: 15.5,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   groupMeta: {
     fontSize: 12.5,

@@ -10,35 +10,30 @@ import type { Track } from '@/api/client';
 type Props = {
   track: Track;
   onPress: () => void;
-  onLongPress?: () => void;
+  /** Opens the track menu; rendered as the trailing "+" button, as in the design. */
   onMenu?: () => void;
-  /** Highlighted because this is what is currently playing. */
+  onLongPress?: () => void;
   active?: boolean;
   playing?: boolean;
-  index?: number;
   showArtwork?: boolean;
-  showFavorite?: boolean;
-  isFavorite?: boolean;
-  onToggleFavorite?: () => void;
-  /** Rendered after the duration, e.g. a remove button. */
+  /** Replaces the "+" button, e.g. reorder controls inside a playlist. */
   trailing?: React.ReactNode;
   subtitle?: string;
+  /** Hides the duration on narrow rows. */
+  showDuration?: boolean;
 };
 
 export function TrackRow({
   track,
   onPress,
-  onLongPress,
   onMenu,
+  onLongPress,
   active = false,
   playing = false,
-  index,
   showArtwork = true,
-  showFavorite = false,
-  isFavorite = false,
-  onToggleFavorite,
   trailing,
   subtitle,
+  showDuration = true,
 }: Props) {
   const theme = useTheme();
 
@@ -48,24 +43,12 @@ export function TrackRow({
       onLongPress={onLongPress}
       style={({ pressed }) => [
         styles.row,
-        { backgroundColor: pressed ? theme.surfacePressed : 'transparent' },
+        { backgroundColor: pressed ? theme.surfaceHigh : 'transparent' },
       ]}>
-      {index != null ? (
-        <View style={styles.index}>
-          {active ? (
-            <Icon name={playing ? 'volume-high' : 'pause'} size={16} color={theme.primary} />
-          ) : (
-            <Text style={[styles.indexText, { color: theme.textMuted }]}>{index + 1}</Text>
-          )}
-        </View>
-      ) : null}
-
       {showArtwork ? <CoverArt track={track} size={46} /> : null}
 
       <View style={styles.text}>
-        <Text
-          numberOfLines={1}
-          style={[styles.title, { color: active ? theme.primary : theme.text }]}>
+        <Text numberOfLines={1} style={[styles.title, { color: active ? theme.primary : theme.text }]}>
           {track.title}
         </Text>
         <Text numberOfLines={1} style={[styles.subtitle, { color: theme.textSecondary }]}>
@@ -73,29 +56,27 @@ export function TrackRow({
         </Text>
       </View>
 
-      {showFavorite ? (
-        <Pressable
-          hitSlop={10}
-          onPress={onToggleFavorite}
-          style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-          <Icon
-            name={isFavorite ? 'heart' : 'heart-outline'}
-            size={19}
-            color={isFavorite ? theme.primary : theme.textMuted}
-          />
-        </Pressable>
+      {active ? (
+        <Icon name={playing ? 'volume-high' : 'pause'} size={16} color={theme.primary} />
       ) : null}
 
-      <Text style={[styles.duration, { color: theme.textMuted }]}>{formatTime(track.duration)}</Text>
+      {showDuration ? (
+        <Text style={[styles.duration, { color: theme.textMuted }]}>{formatTime(track.duration)}</Text>
+      ) : null}
 
       {trailing}
 
       {onMenu ? (
         <Pressable
           hitSlop={10}
+          accessibilityLabel={`More options for ${track.title}`}
           onPress={onMenu}
-          style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-          <Icon name="ellipsis-horizontal" size={18} color={theme.textMuted} />
+          style={({ pressed }) => [
+            styles.addButton,
+            { backgroundColor: theme.primarySoft },
+            pressed && styles.pressed,
+          ]}>
+          <Icon name="add" size={18} color={theme.primary} />
         </Pressable>
       ) : null}
     </Pressable>
@@ -110,15 +91,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.sm,
     borderRadius: Radius.md,
-    minHeight: 62,
-  },
-  index: {
-    width: 24,
-    alignItems: 'center',
-  },
-  indexText: {
-    fontSize: 13,
-    fontVariant: ['tabular-nums'],
+    minHeight: 64,
   },
   text: {
     flex: 1,
@@ -126,20 +99,22 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   subtitle: {
     fontSize: 12.5,
     marginTop: 2,
   },
   duration: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontVariant: ['tabular-nums'],
-    minWidth: 42,
-    textAlign: 'right',
   },
-  iconButton: {
-    padding: Spacing.xs,
+  addButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pressed: {
     opacity: 0.6,

@@ -32,7 +32,7 @@ export default function PlayerScreen() {
 
   const player = usePlayer();
   const favorites = useFavorites();
-  const { openAddToPlaylist } = useOverlays();
+  const { openAddToPlaylist, openTrackActions } = useOverlays();
 
   const [scrub, setScrub] = useState<number | null>(null);
 
@@ -52,15 +52,13 @@ export default function PlayerScreen() {
     );
   }
 
-  const artSize = Math.min(width - Spacing.xl * 2, MAX_CONTENT_WIDTH - 260, 340);
+  const artSize = Math.min(width - Spacing.xl * 2, MAX_CONTENT_WIDTH - 300, 320);
   const displayPosition = scrub ?? player.position;
   const isFavorite = favorites.isFavorite(track.id);
-
   const repeatColor = player.repeat === 'off' ? theme.textMuted : theme.primary;
 
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
-      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + Spacing.sm }]}>
         <Pressable
           onPress={() => router.back()}
@@ -69,23 +67,20 @@ export default function PlayerScreen() {
           <Icon name="chevron-down" size={26} />
         </Pressable>
 
-        <Text style={[styles.headerLabel, { color: theme.textSecondary }]}>
-          {truncate(track.album, 34)}
+        <Text numberOfLines={1} style={[styles.headerLabel, { color: theme.text }]}>
+          {truncate(track.title, 34)}
         </Text>
 
         <Pressable
-          onPress={() => router.push('/queue')}
           hitSlop={12}
+          onPress={() => openTrackActions(track)}
           style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
-          <Icon name="list" size={22} muted />
+          <Icon name="ellipsis-horizontal" size={22} muted />
         </Pressable>
       </View>
 
       <ScrollView
-        contentContainerStyle={[
-          styles.body,
-          { paddingBottom: insets.bottom + Spacing.xl },
-        ]}
+        contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + Spacing.xl }]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.artWrap}>
           <CoverArt track={track} size={artSize} radius={Radius.xl} />
@@ -96,11 +91,10 @@ export default function PlayerScreen() {
             {track.title}
           </Text>
           <Text numberOfLines={1} style={[styles.artist, { color: theme.textSecondary }]}>
-            {track.artist}
+            {track.artist} · {track.album}
           </Text>
         </View>
 
-        {/* Progress */}
         <View style={styles.progressBlock}>
           <Slider
             value={displayPosition}
@@ -118,12 +112,13 @@ export default function PlayerScreen() {
               {formatTime(displayPosition)}
             </Text>
             <Text style={[styles.time, { color: theme.textMuted }]}>
-              {player.duration ? `-${formatTime(Math.max(0, player.duration - displayPosition))}` : '--:--'}
+              {player.duration
+                ? `-${formatTime(Math.max(0, player.duration - displayPosition))}`
+                : '--:--'}
             </Text>
           </View>
         </View>
 
-        {/* Transport controls */}
         <View style={styles.controls}>
           <Pressable
             hitSlop={10}
@@ -131,7 +126,7 @@ export default function PlayerScreen() {
             style={({ pressed }) => [styles.sideButton, pressed && styles.pressed]}>
             <Icon
               name="shuffle"
-              size={22}
+              size={21}
               color={player.shuffle ? theme.primary : theme.textMuted}
             />
           </Pressable>
@@ -140,7 +135,7 @@ export default function PlayerScreen() {
             hitSlop={10}
             onPress={player.previous}
             style={({ pressed }) => [styles.sideButton, pressed && styles.pressed]}>
-            <Icon name="play-skip-back" size={30} />
+            <Icon name="play-skip-back" size={28} />
           </Pressable>
 
           <Pressable
@@ -148,16 +143,16 @@ export default function PlayerScreen() {
             onPress={player.toggle}
             style={({ pressed }) => [
               styles.playButton,
-              { backgroundColor: theme.text },
+              { backgroundColor: theme.primary },
               pressed && styles.pressed,
             ]}>
             {player.isBuffering ? (
-              <ActivityIndicator color={theme.background} />
+              <ActivityIndicator color={theme.onPrimary} />
             ) : (
               <Icon
                 name={player.isPlaying ? 'pause' : 'play'}
-                size={32}
-                color={theme.background}
+                size={28}
+                color={theme.onPrimary}
               />
             )}
           </Pressable>
@@ -166,7 +161,7 @@ export default function PlayerScreen() {
             hitSlop={10}
             onPress={player.next}
             style={({ pressed }) => [styles.sideButton, pressed && styles.pressed]}>
-            <Icon name="play-skip-forward" size={30} />
+            <Icon name="play-skip-forward" size={28} />
           </Pressable>
 
           <Pressable
@@ -174,7 +169,7 @@ export default function PlayerScreen() {
             onPress={player.cycleRepeat}
             style={({ pressed }) => [styles.sideButton, pressed && styles.pressed]}>
             <View>
-              <Icon name="repeat" size={22} color={repeatColor} />
+              <Icon name="repeat" size={21} color={repeatColor} />
               {player.repeat === 'one' ? (
                 <View style={[styles.badge, { backgroundColor: theme.primary }]}>
                   <Text style={styles.badgeText}>1</Text>
@@ -184,14 +179,13 @@ export default function PlayerScreen() {
           </Pressable>
         </View>
 
-        {/* Secondary actions */}
         <View style={styles.actions}>
           <Pressable
             onPress={() => favorites.toggleFavorite(track.id)}
             style={({ pressed }) => [styles.action, pressed && styles.pressed]}>
             <Icon
               name={isFavorite ? 'heart' : 'heart-outline'}
-              size={22}
+              size={21}
               color={isFavorite ? theme.primary : theme.textSecondary}
             />
             <Text style={[styles.actionText, { color: theme.textSecondary }]}>
@@ -202,63 +196,63 @@ export default function PlayerScreen() {
           <Pressable
             onPress={() => openAddToPlaylist(track)}
             style={({ pressed }) => [styles.action, pressed && styles.pressed]}>
-            <Icon name="add-circle-outline" size={22} color={theme.textSecondary} />
+            <Icon name="add-circle-outline" size={21} color={theme.textSecondary} />
             <Text style={[styles.actionText, { color: theme.textSecondary }]}>Playlist</Text>
           </Pressable>
 
           <Pressable
             onPress={() => router.push('/queue')}
             style={({ pressed }) => [styles.action, pressed && styles.pressed]}>
-            <Icon name="albums-outline" size={22} color={theme.textSecondary} />
+            <Icon name="list" size={21} color={theme.textSecondary} />
             <Text style={[styles.actionText, { color: theme.textSecondary }]}>
               Queue ({player.queue.length})
             </Text>
           </Pressable>
         </View>
 
-        {/* Volume */}
-        <View style={styles.volumeBlock}>
-          <Pressable
-            hitSlop={8}
-            onPress={() => player.setVolume(player.volume > 0 ? 0 : 1)}>
-            <Icon
-              name={player.volume === 0 ? 'volume-mute' : 'volume-low'}
-              size={20}
-              muted
+        <View style={styles.extras}>
+          <View style={styles.volumeBlock}>
+            <Pressable
+              hitSlop={8}
+              onPress={() => player.setVolume(player.volume > 0 ? 0 : 1)}>
+              <Icon
+                name={player.volume === 0 ? 'volume-mute' : 'volume-low'}
+                size={19}
+                muted
+              />
+            </Pressable>
+            <Slider
+              value={player.volume}
+              max={1}
+              height={4}
+              onChange={player.setVolume}
+              onCommit={player.setVolume}
             />
-          </Pressable>
-          <Slider
-            value={player.volume}
-            max={1}
-            height={4}
-            onChange={player.setVolume}
-            onCommit={player.setVolume}
-          />
-          <Icon name="volume-high" size={20} muted />
-        </View>
+            <Icon name="volume-high" size={19} muted />
+          </View>
 
-        {/* Speed */}
-        <View style={styles.speeds}>
-          {SPEEDS.map((speed) => {
-            const active = Math.abs(player.rate - speed) < 0.01;
-            return (
-              <Pressable
-                key={speed}
-                onPress={() => player.setRate(speed)}
-                style={[
-                  styles.speedChip,
-                  {
-                    backgroundColor: active ? theme.primary : theme.surfaceHigh,
-                    borderColor: active ? theme.primary : theme.border,
-                  },
-                ]}>
-                <Text
-                  style={[styles.speedText, { color: active ? theme.onPrimary : theme.text }]}>
-                  {speed}×
-                </Text>
-              </Pressable>
-            );
-          })}
+          <View style={styles.speeds}>
+            {SPEEDS.map((speed) => {
+              const active = Math.abs(player.rate - speed) < 0.01;
+              return (
+                <Pressable
+                  key={speed}
+                  onPress={() => player.setRate(speed)}
+                  style={[
+                    styles.speedChip,
+                    { backgroundColor: active ? theme.primary : theme.primarySoft },
+                  ]}>
+                  <Text
+                    style={[
+                      styles.speedText,
+                      { color: active ? theme.onPrimary : theme.primary },
+                    ]}>
+                    {speed}×
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
         {track.attribution ? (
@@ -284,14 +278,13 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: Spacing.sm,
+    minWidth: 40,
   },
   headerLabel: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
     flex: 1,
     textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '700',
   },
   body: {
     paddingHorizontal: Spacing.xl,
@@ -303,11 +296,11 @@ const styles = StyleSheet.create({
   },
   artWrap: {
     marginTop: Spacing.sm,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 24,
+    shadowColor: '#101024',
+    shadowOpacity: 0.16,
+    shadowRadius: 22,
     shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
+    elevation: 6,
   },
   titles: {
     width: '100%',
@@ -315,13 +308,13 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
     textAlign: 'center',
     letterSpacing: -0.4,
   },
   artist: {
-    fontSize: 15,
+    fontSize: 14.5,
     textAlign: 'center',
   },
   progressBlock: {
@@ -346,13 +339,13 @@ const styles = StyleSheet.create({
   },
   sideButton: {
     padding: Spacing.sm,
-    minWidth: 48,
+    minWidth: 46,
     alignItems: 'center',
   },
   playButton: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -387,33 +380,31 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '600',
   },
+  extras: {
+    width: '100%',
+    gap: Spacing.md,
+    marginTop: Spacing.sm,
+  },
   volumeBlock: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    width: '100%',
-    marginTop: Spacing.sm,
   },
   speeds: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    marginTop: Spacing.sm,
+    justifyContent: 'center',
   },
   speedChip: {
     paddingHorizontal: Spacing.md,
     height: 32,
     borderRadius: Radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },
   speedText: {
     fontSize: 12.5,
     fontWeight: '700',
-  },
-  error: {
-    fontSize: 13,
-    textAlign: 'center',
   },
   attribution: {
     fontSize: 11,

@@ -1,17 +1,20 @@
 /**
- * Design tokens. The palette is dark-first (music apps live in dark rooms) with
- * a full light variant, and every screen reads from here so the look stays
- * consistent.
+ * Design tokens.
+ *
+ * The look follows the light mockup: white surfaces, soft grey chips and a
+ * violet accent. A dark palette is kept in step for later, but the app is
+ * deliberately pinned to light so it matches the reference design everywhere —
+ * flip `LOCKED_SCHEME` to `undefined` to follow the system again.
  */
 import { Platform } from 'react-native';
 
 export const Palette = {
   brand: '#7C5CFF',
-  brandSoft: '#9B87FF',
-  mint: '#00D3A7',
-  amber: '#FFB020',
-  rose: '#FF5C8A',
-  sky: '#4FA8FF',
+  brandSoft: '#EFEBFF',
+  mint: '#12B886',
+  amber: '#F59F00',
+  rose: '#F06595',
+  sky: '#4DABF7',
 } as const;
 
 export type ThemeColors = {
@@ -24,15 +27,31 @@ export type ThemeColors = {
   textSecondary: string;
   textMuted: string;
   primary: string;
+  /** Tinted fill behind violet text, used by chips and icon plates. */
+  primarySoft: string;
   onPrimary: string;
   danger: string;
   tabBar: string;
   overlay: string;
 };
 
-export type ThemeColorName = keyof ThemeColors;
-
 export const Colors: { dark: ThemeColors; light: ThemeColors } = {
+  light: {
+    background: '#FFFFFF',
+    surface: '#F7F7FB',
+    surfaceHigh: '#EEEFF5',
+    surfacePressed: '#E3E4ED',
+    border: '#E7E8F0',
+    text: '#14141B',
+    textSecondary: '#6E6E86',
+    textMuted: '#A1A1B5',
+    primary: Palette.brand,
+    primarySoft: Palette.brandSoft,
+    onPrimary: '#FFFFFF',
+    danger: '#E5484D',
+    tabBar: 'rgba(255,255,255,0.97)',
+    overlay: 'rgba(20,20,27,0.45)',
+  },
   dark: {
     background: '#0B0B0F',
     surface: '#15151C',
@@ -42,28 +61,17 @@ export const Colors: { dark: ThemeColors; light: ThemeColors } = {
     text: '#FFFFFF',
     textSecondary: '#9A9AAE',
     textMuted: '#6B6B7B',
-    primary: Palette.brand,
+    primary: '#8E74FF',
+    primarySoft: '#241D42',
     onPrimary: '#FFFFFF',
-    danger: '#FF5C5C',
-    tabBar: 'rgba(16,16,22,0.92)',
+    danger: '#FF6B6B',
+    tabBar: 'rgba(16,16,22,0.94)',
     overlay: 'rgba(0,0,0,0.6)',
   },
-  light: {
-    background: '#FFFFFF',
-    surface: '#F5F5F8',
-    surfaceHigh: '#EBEBF1',
-    surfacePressed: '#E0E0E8',
-    border: '#E3E3EB',
-    text: '#0B0B0F',
-    textSecondary: '#62626F',
-    textMuted: '#8E8E9C',
-    primary: Palette.brand,
-    onPrimary: '#FFFFFF',
-    danger: '#D93A3A',
-    tabBar: 'rgba(255,255,255,0.92)',
-    overlay: 'rgba(0,0,0,0.4)',
-  },
-} as const;
+};
+
+/** Set to 'light' or 'dark' to pin the theme, or `undefined` to follow the system. */
+export const LOCKED_SCHEME: 'light' | 'dark' | undefined = 'light';
 
 export const Spacing = {
   xs: 4,
@@ -96,8 +104,8 @@ export const Fonts = Platform.select({
   },
 });
 
-/** Height reserved for the tab bar so lists can pad their bottom correctly. */
-export const TAB_BAR_HEIGHT = 60;
-/** Height of the floating mini player that sits on top of the tab bar. */
-export const MINI_PLAYER_HEIGHT = 62;
-export const MAX_CONTENT_WIDTH = 900;
+/** Height of the floating mini player at the bottom of the screen. */
+export const MINI_PLAYER_HEIGHT = 64;
+/** Height of the top tab strip. */
+export const TOP_TABS_HEIGHT = 46;
+export const MAX_CONTENT_WIDTH = 720;

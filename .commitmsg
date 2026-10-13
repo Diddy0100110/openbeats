@@ -1,0 +1,19 @@
+Redesign the app around the light reference layout
+
+- Light theme, pinned via LOCKED_SCHEME, with a violet accent
+- Navigation moves to a top tab strip (expo-router/ui) instead of a bottom bar
+- Mini player redesigned: artwork, title, previous/play/next on a floating card
+- Track rows use a thumbnail plus a round plus-button that opens the track sheet
+- Playlists render as a two-column grid, like the reference
+- Player screen restructured around the new artwork/progress/controls layout
+
+Two implementation notes worth keeping:
+
+* expo-router/ui discovers screens by reading the layout's own JSX, so the
+  TabTrigger elements must be declared in (tabs)/_layout.tsx. Extracting them
+  into a component makes the navigator throw "couldn't find any screens".
+* A child of <TabList asChild> / <TabTrigger asChild> goes through a Slot, which
+  rejects an array of styles. Those styles are flattened with StyleSheet.flatten.
+
+Verified in the browser: inactive tabs are display:none (no overlap), the strip
+renders white, and Home/Search/Playlists each render their own content.
