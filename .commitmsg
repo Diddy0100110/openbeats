@@ -1,19 +1,26 @@
-Support Supabase's new API key format
+Store uploads in Postgres, so one credential is enough
 
-Reading the current Supabase docs turned up two things that would have broken
-the setup:
+Supabase's Storage API key turned out to be a real obstacle: the dashboard moved
+it, the legacy service_role JWT is deprecated, and the new sb_secret_ keys are
+not JWTs. Since a Postgres DATABASE_URL was already needed for durable metadata,
+the audio can live there too and the second credential disappears entirely.
 
-1. There is no longer a "Settings > API" page — keys now live under
-   "Settings > API Keys". The URL I had been handing out returns 404, so the
-   instructions were unusable.
-2. anon/service_role JWTs are deprecated in favour of sb_publishable_… and
-   sb_secret_… keys, which are *not* JWTs and must be sent on the `apikey`
-   header. Sending only `Authorization: Bearer` would fail for them.
+- New track_files table (audio + artwork as bytea, one row per track, cascaded on
+  delete). Blobs sit in their own table so listing the library never loads them.
+- Uploads pick a backend automatically: database when Postgres is configured,
+  supabase when a bucket is configured, local otherwise.
+- /api/stream slices the blob server-side with substr(bytea, from, count), so a
+  seek transfers only the requested bytes and still returns 206 + Content-Range.
+  /tracks/{id}/artwork serves the artwork column the same way.
+- GET /api/health and /api/storage/status report the backend, and durability is
+  now simply "not SQLite" — the Settings screen reflects that.
+- POST /api/tracks/purge-demo deletes tracks that stream from a remote URL (the
+  seeded catalogue) and any playlists left empty. Uploads never have a
+  source_url, so they are untouched. SEED_DEMO now defaults to false.
 
-ObjectStore now sends both `apikey` and `Authorization`, so either key type
-works. Also detects Supabase's transaction-mode pooler (port 6543 or
-pgbouncer=true) and disables psycopg 3 prepared statements for it, since that
-pooler cannot support them.
-
-Verified: pooler detection for all three URL shapes, engine still resolves to
-SQLite locally, and the generated auth headers/public URLs are correct.
+Verified against a real Supabase Postgres: seeded 129 demo tracks, uploaded a
+track with cover art, streamed it with a byte range, then deleted the entire
+local data/ directory and restarted. The track still listed, streamed (206,
+0-4095/1523659) and returned its artwork (200 image/jpeg) — so it genuinely
+survives a redeploy. purge-demo then removed the 129 demo tracks and 6 playlists
+while keeping the upload.

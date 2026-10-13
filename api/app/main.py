@@ -114,7 +114,7 @@ def health() -> Health:
         app=config.APP_NAME,
         version=config.APP_VERSION,
         storage="sqlite" if config.IS_SQLITE else "postgres",
-        files="supabase" if config.USES_OBJECT_STORAGE else "local",
+        files=config.FILE_BACKEND,
     )
 
 
@@ -123,8 +123,10 @@ def storage_status() -> dict:
     """Used by the Settings screen to show whether uploads are durable."""
     return {
         **store.status(),
+        "backend": config.FILE_BACKEND,
         "database": "sqlite" if config.IS_SQLITE else "postgres",
-        "durable": config.USES_OBJECT_STORAGE and not config.IS_SQLITE,
+        # Postgres survives a redeploy, wherever the audio itself lives.
+        "durable": not config.IS_SQLITE,
     }
 
 

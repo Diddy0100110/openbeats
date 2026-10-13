@@ -127,50 +127,72 @@ novos, reconstrói com o `EXPO_PUBLIC_API_URL` correto (Passo 3).
 
 ---
 
-## Passo 5 — (Recomendado) Armazenamento permanente com Supabase
+## Passo 5 — (Recomendado) Armazenamento permanente
 
-No plano gratuito do Render o disco é **efémero**: cada deploy apaga os uploads e, se estiveres a
-usar SQLite, também a biblioteca. A solução gratuita e permanente é guardar tudo no **Supabase**.
+No plano gratuito do Render o disco é **efémero**: cada deploy apagaria os uploads. A solução
+gratuita e permanente é guardar tudo numa **base de dados Postgres do Supabase** — com **uma só
+credencial**, porque o áudio e as capas ficam dentro da própria base de dados.
 
-### 5.1 Criar o projeto
+### 5.1 Criar o projeto no Supabase
 
-1. Cria conta em <https://supabase.com> (grátis, sem cartão)
-2. **New project** → escolhe um nome e uma password para a base de dados → **Create**
+1. Cria conta em <https://supabase.com> (grátis, sem cartão) → **New project**
+2. Escolhe um nome e uma **password de base de dados** → **guarda-a**
 3. Espera ~2 minutos
 
-### 5.2 Copiar os três valores
+### 5.2 Obter a linha de ligação
 
-| Onde | O que copiar |
-| --- | --- |
-| **Project Settings → Database → Connection string → URI** | `DATABASE_URL` — troca `[YOUR-PASSWORD]` pela password que escolheste |
-| **Project Settings → API → Project URL** | `SUPABASE_URL` (ex.: `https://abcdefgh.supabase.co`) |
-| **Project Settings → API → Project API keys → `service_role`** | `SUPABASE_SERVICE_KEY` |
+1. No projeto, clica no botão verde **`Connect`** (topo da página)
+2. Escolhe **`Session pooler`** e o formato **`URI`**
+3. Copia a linha e **substitui `[YOUR-PASSWORD]`** pela password do passo 1
 
-> 🔐 O `service_role` ignora as regras de acesso. Trata-o como uma password e nunca o ponhas no
-> GitHub — no `render.yaml` ele está marcado com `sync: false` exatamente para isso.
+Fica com este aspecto (porta **5432** = session pooler, que funciona a partir do Render):
+
+```
+postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+```
+
+> ⚠️ Usa a **Session pooler**, não a "Direct connection": a ligação direta só tem IPv6 e o Render
+> não consegue alcançá-la. O código também já deteta e corrige a *transaction pooler* (porta 6543).
 
 ### 5.3 Aplicar no Render
 
-1. No painel do Render, entra no Blueprint **openbeats** → **`Manual sync`**
-2. O Render vai pedir os três valores novos → cola-os → confirma
+1. No painel do Render: Blueprint **openbeats** → **`Manual sync`**
+2. O Render vai pedir o valor de **`DATABASE_URL`** → cola a linha → confirma
 3. Espera pelo deploy. Nos logs deves ver:
    ```
-   Files    : supabase bucket 'openbeats'
-   Created Supabase bucket 'openbeats'
+   Database : postgresql+psycopg://postgres...
+   Files    : database
    ```
 
-O bucket é criado automaticamente. A partir daí **os uploads sobrevivem a todos os deploys**.
+A partir daí **os uploads sobrevivem a todos os deploys**.
 
 ### 5.4 Confirmar
 
-Abre `/api/health` — deve dizer `"files":"supabase"`:
-
 ```
 https://openbeats-api.onrender.com/api/health
+→ {"status":"ok","storage":"postgres","files":"database"}
 ```
 
 Ou, dentro do app, em **⚙️ Definições → STORAGE**: deve aparecer a verde
 *"Uploads are stored permanently"*.
+
+### 5.5 Espaço
+
+O plano gratuito do Supabase dá **500 MB** — cerca de **50 músicas** de 10 MB. Se precisares de mais,
+há duas saídas:
+
+- **Supabase Storage** (1 GB, servido por CDN): descomenta as variáveis `SUPABASE_*` no `render.yaml`
+  e define-as no Render. O código passa a usá-lo automaticamente.
+- Plano pago do Supabase.
+
+### 5.6 Apagar o catálogo de demonstração
+
+O `SEED_DEMO` já vem a `false`, por isso os deploys novos arrancam vazios. Para limpar uma base de
+dados que já tenha as 129 faixas (sem tocar nos teus uploads):
+
+```powershell
+curl -X POST https://openbeats-api.onrender.com/api/tracks/purge-demo
+```
 
 ---
 

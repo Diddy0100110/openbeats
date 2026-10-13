@@ -14,7 +14,8 @@ from sqlalchemy.orm import Session
 from .. import config
 from ..artwork import extract_artwork, save_artwork
 from ..database import get_db
-from ..models import Track
+from ..dbblob import blob_size, serve_blob
+from ..models import Track, TrackFile
 from ..objectstore import artwork_key, audio_key, store
 from ..schemas import DurationReport, Facets, GroupCount, Stats, TrackOut, TrackPage, TrackUpdate
 from ..streaming import guess_mime
@@ -91,6 +92,39 @@ def list_tracks(
 
     items = [TrackOut.from_track(t) for t in db.scalars(stmt).all()]
     return TrackPage(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.post("/purge-demo", summary="Delete the demo catalogue, keeping user uploads")
+def purge_demo(db: Session = Depends(get_db)) -> dict:
+    """Remove every track that streams from a remote URL.
+
+    That is exactly the seeded demo catalogue: uploads always have a stored file
+    rather than a `source_url`, so they are never touched. Playlists left empty
+    are removed as well, and the whole thing is reversible by re-enabling
+    `SEED_DEMO`.
+    """
+    from ..models import Playlist
+
+    demos = db.scalars(select(Track).where(Track.source_url.is_not(None))).all()
+    for track in demos:
+        db.delete(track)
+    db.flush()
+    # The cascade removed the playlist entries; drop the cached collections so
+    # the emptiness check below sees the current state.
+    db.expire_all()
+
+    emptied = [p for p in db.scalars(select(Playlist)).all() if not p.items]
+    for playlist in emptied:
+        db.delete(playlist)
+
+    db.commit()
+    log.info("Purged %d demo tracks and %d empty playlists", len(demos), len(emptied))
+
+    return {
+        "deleted_tracks": len(demos),
+        "deleted_playlists": len(emptied),
+        "remaining_tracks": db.scalar(select(func.count(Track.id))) or 0,
+    }
 
 
 @router.get("/facets", response_model=Facets, summary="Artists / albums / genres with counts")
@@ -209,13 +243,28 @@ def upload_track(
     except Exception as exc:  # noqa: BLE001
         log.warning("artwork extraction failed for %s: %s", stored_name, exc)
 
-    # ---- copy to object storage so the upload survives a redeploy -----------
-    # The local file stays as the source of truth for this process; if the copy
-    # fails the track is still playable, just not durable.
+    # ---- store the audio so it survives a redeploy --------------------------
+    # Three options, in order of preference:
+    #   database  – Postgres is configured, so put the blob in it (one credential)
+    #   supabase  – a Storage bucket is configured (roomier, and off CDN)
+    #   local     – development only: an ephemeral file on disk
     backend = "local"
-    if config.USES_OBJECT_STORAGE:
+    audio_bytes: bytes | None = None
+    artwork_bytes: bytes | None = None
+    artwork_mime: str | None = None
+    mime = file.content_type or guess_mime(destination, "audio/mpeg")
+
+    if config.STORES_AUDIO_IN_DATABASE:
+        backend = "database"
+        audio_bytes = destination.read_bytes()
+        if artwork_path:
+            art_file = config.ARTWORK_DIR / artwork_path
+            if art_file.is_file():
+                artwork_bytes = art_file.read_bytes()
+                artwork_mime = guess_mime(art_file, "image/jpeg")
+
+    elif config.USES_OBJECT_STORAGE:
         try:
-            mime = file.content_type or guess_mime(destination, "audio/mpeg")
             if store.put(audio_key(stored_name), destination.read_bytes(), mime):
                 backend = "supabase"
                 if artwork_path:
@@ -237,14 +286,22 @@ def upload_track(
         album=(album or probed.get("album") or "Unknown album").strip(),
         genre=(genre or probed.get("genre") or None),
         file_path=stored_name,
-        mime_type=file.content_type or "audio/mpeg",
+        mime_type=mime,
         duration=duration,
         size_bytes=size,
         storage_backend=backend,
         artwork_path=artwork_path,
-        has_artwork=artwork_path is not None,
+        has_artwork=artwork_path is not None or artwork_bytes is not None,
         attribution="Uploaded by a user of this library",
     )
+
+    if audio_bytes is not None:
+        track.file = TrackFile(
+            audio=audio_bytes,
+            audio_type=mime,
+            artwork=artwork_bytes,
+            artwork_type=artwork_mime,
+        )
     db.add(track)
     db.commit()
     db.refresh(track)
@@ -306,6 +363,27 @@ def delete_track(track_id: int, db: Session = Depends(get_db)):
 @router.get("/{track_id}/artwork", summary="Embedded cover art (404 when there is none)")
 def get_artwork(track_id: int, db: Session = Depends(get_db)):
     track = _get_track(track_id, db)
+
+    # Stored inside the database.
+    if track.storage_backend == "database":
+        size = blob_size(db, TrackFile.artwork, TrackFile.track_id == track.id)
+        if size > 0:
+            mime = (
+                db.execute(
+                    select(TrackFile.artwork_type).where(TrackFile.track_id == track.id)
+                ).scalar()
+                or "image/jpeg"
+            )
+            return serve_blob(
+                db,
+                TrackFile.artwork,
+                TrackFile.track_id == track.id,
+                size,
+                None,
+                mime,
+                cache_seconds=604_800,
+            )
+        raise HTTPException(status_code=404, detail="This track has no embedded artwork")
 
     # Stored in the object store: send the client straight to it.
     if track.storage_backend == "supabase" and track.artwork_path:

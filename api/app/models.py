@@ -8,6 +8,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -58,10 +59,36 @@ class Track(Base):
     links: Mapped[list["PlaylistTrack"]] = relationship(
         back_populates="track", cascade="all, delete-orphan"
     )
+    file: Mapped["TrackFile | None"] = relationship(
+        back_populates="track", cascade="all, delete-orphan", uselist=False
+    )
 
     @property
     def origin(self) -> str:
         return "upload" if self.file_path else "remote"
+
+
+class TrackFile(Base):
+    """Audio and cover art stored *inside* the database.
+
+    Chosen when a Postgres database is configured but no Supabase Storage bucket
+    is, so uploads survive deploys with a single credential. Blobs live in their
+    own table, so listing the library never loads them.
+    """
+
+    __tablename__ = "track_files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("tracks.id", ondelete="CASCADE"), unique=True, index=True
+    )
+
+    audio: Mapped[bytes | None] = mapped_column(LargeBinary)
+    audio_type: Mapped[str] = mapped_column(String(100), default="audio/mpeg")
+    artwork: Mapped[bytes | None] = mapped_column(LargeBinary)
+    artwork_type: Mapped[str | None] = mapped_column(String(100))
+
+    track: Mapped[Track] = relationship(back_populates="file")
 
 
 class Playlist(Base):

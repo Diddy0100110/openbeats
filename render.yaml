@@ -28,24 +28,30 @@ services:
       - key: PYTHON_VERSION
         value: "3.12.10"
       # --- Durable storage ---------------------------------------------------
-      # With a Postgres DATABASE_URL plus a Supabase bucket, uploads survive
-      # deploys. `sync: false` makes Render prompt for the value instead of
-      # storing it in this (public) repository.
+      # One value is enough: with a Postgres database, uploads (audio + cover art)
+      # are stored inside it and survive every deploy. `sync: false` makes Render
+      # prompt for the value instead of keeping it in this public repository.
       - key: DATABASE_URL
         sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_KEY
-        sync: false
-      - key: SUPABASE_BUCKET
-        value: openbeats
+      # Optional: a Supabase Storage bucket instead of blobs in the database.
+      # Roomier (1 GB vs 500 MB) and served from Supabase's CDN. Leave unset to
+      # keep everything in Postgres.
+      # - key: SUPABASE_URL
+      #   sync: false
+      # - key: SUPABASE_SERVICE_KEY
+      #   sync: false
+      # - key: SUPABASE_BUCKET
+      #   value: openbeats
+      #
       # NOTE: DATA_DIR is deliberately *not* set. On the free plan /data does not
       # exist and is not writable, so the app uses a directory inside the project
-      # (a scratch area for uploads that are being pushed to the bucket).
+      # as a scratch area.
       # - key: DATA_DIR
       #   value: /data
+      #
+      # The demo catalogue is off: this is an upload-only library.
       - key: SEED_DEMO
-        value: "true"
+        value: "false"
       - key: MAX_UPLOAD_MB
         value: "200"
       - key: CORS_ORIGINS

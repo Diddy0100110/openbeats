@@ -108,3 +108,12 @@ SUPABASE_BUCKET = (os.getenv("SUPABASE_BUCKET") or "openbeats").strip()
 
 # When unset, uploads are written to the local disk (fine for development).
 USES_OBJECT_STORAGE = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
+
+# With a Postgres database but no storage bucket, blobs live in the database
+# itself — one credential, and uploads still survive redeploys.
+STORES_AUDIO_IN_DATABASE = (not IS_SQLITE) and (not USES_OBJECT_STORAGE)
+
+# Human-readable answer to "where do uploads go?".
+FILE_BACKEND = (
+    "supabase" if USES_OBJECT_STORAGE else "database" if STORES_AUDIO_IN_DATABASE else "local"
+)
