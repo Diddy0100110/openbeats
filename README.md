@@ -72,6 +72,7 @@ musicapp/
 │       ├── hooks/  lib/        # utilitários
 │       └── constants/theme.ts  # design tokens
 ├── render.yaml                 # blueprint do Render (API)
+├── tools/make_icons.py         # gera todos os ícones
 └── DEPLOY.md                   # como publicar
 ```
 
@@ -151,6 +152,17 @@ cd api
 
 O script retira metadados do Internet Archive, corrige erros de codificação presentes na fonte,
 estima/associa durações e verifica que todos os ficheiros de áudio respondem.
+
+## Regenerar os ícones
+
+Todos os ícones (app, favicon, splash, Android adaptativo) saem de uma única definição:
+
+```powershell
+pip install Pillow            # só é preciso para este script
+python tools/make_icons.py
+```
+
+Para mudar as cores, edita `TOP` / `BOTTOM` no topo do ficheiro; para a forma, a geometria do glyph.
 
 ## Créditos e licenças
 
