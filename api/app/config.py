@@ -1,20 +1,49 @@
 """Application configuration, driven entirely by environment variables."""
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
+
+log = logging.getLogger("openbeats.config")
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent  # -> api/
 
-DATA_DIR = Path(os.getenv("DATA_DIR") or (BASE_DIR / "data")).resolve()
+
+def _prepare_data_dir() -> Path:
+    """Resolve a *writable* directory for the SQLite file and uploaded audio.
+
+    ``DATA_DIR`` is respected when possible (a Render disk mounts at ``/data``),
+    but on an ephemeral plan that path belongs to root and cannot be created. In
+    that case we fall back to a directory inside the project, which is always
+    writable. Failing over is far better than refusing to boot.
+    """
+    configured = os.getenv("DATA_DIR")
+    candidates = [Path(configured).expanduser()] if configured else []
+    candidates.append(BASE_DIR / "data")
+
+    for candidate in candidates:
+        try:
+            (candidate / "music").mkdir(parents=True, exist_ok=True)
+            probe = candidate / ".write-probe"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink()
+        except OSError as exc:
+            log.warning("Cannot use DATA_DIR=%s (%s)", candidate, exc)
+            continue
+        if configured and candidate != Path(configured).expanduser():
+            log.warning("Falling back to DATA_DIR=%s", candidate)
+        return candidate.resolve()
+
+    raise RuntimeError("No writable directory found for application data.")
+
+
+DATA_DIR = _prepare_data_dir()
 MUSIC_DIR = DATA_DIR / "music"
 DB_PATH = DATA_DIR / "library.db"
-
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-MUSIC_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # Database
