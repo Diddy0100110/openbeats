@@ -1,5 +1,17 @@
 # 🎧 OpenBeats
 
+> **Está publicado!**
+>
+> | | |
+> | --- | --- |
+> | 🌐 **App (partilha este link)** | **<https://openbeats.expo.app>** |
+> | 🔌 API | <https://openbeats-api.onrender.com> · [`/docs`](https://openbeats-api.onrender.com/docs) · [`/api/health`](https://openbeats-api.onrender.com/api/health) |
+> | 📦 Código | <https://github.com/Diddy0100110/openbeats> |
+> | 🛠 Painéis | [Expo](https://expo.dev/projects/6da240a1-6096-4cc8-b0a9-25f055d07a0c) · [Render](https://dashboard.render.com) |
+>
+> Para atualizar depois de mudar código: `git push` (a API faz deploy sozinha) e, para o site,
+> `cd app && npx expo export --platform web --clear && eas deploy --prod`.
+
 Um leitor de música completo: app em **React Native (Expo)**, API em **Python (FastAPI)** e base de
 dados **SQLite**. O site fica hospedado no **Expo (EAS Hosting)** e há uma **API pública** à parte —
 basta partilhar o link e qualquer pessoa consegue ouvir, criar playlists e enviar as suas músicas.
