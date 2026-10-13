@@ -146,6 +146,16 @@ export const api = {
 
   stats: () => request<Stats>('/api/tracks/stats'),
 
+  storageStatus: () =>
+    request<{
+      backend: string;
+      configured: boolean;
+      database: string;
+      durable: boolean;
+      url?: string;
+      bucket?: string;
+    }>('/api/storage/status'),
+
   facets: () => request<Facets>('/api/tracks/facets'),
 
   listTracks: (params: {

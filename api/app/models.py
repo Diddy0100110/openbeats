@@ -41,6 +41,8 @@ class Track(Base):
 
     mime_type: Mapped[str] = mapped_column(String(100), default="audio/mpeg")
     size_bytes: Mapped[int | None] = mapped_column(Integer)
+    # Where the audio and its cover live: "local" (ephemeral disk) or "supabase".
+    storage_backend: Mapped[str] = mapped_column(String(20), default="local")
     # Cover art extracted at upload time, stored as its own file.
     artwork_path: Mapped[str | None] = mapped_column(String(300))
     has_artwork: Mapped[bool] = mapped_column(default=False)

@@ -164,6 +164,8 @@ class Health(BaseModel):
     app: str
     version: str
     storage: str
+    # Where uploaded audio and cover art are kept.
+    files: str = "local"
 
 
 class UploadResult(BaseModel):

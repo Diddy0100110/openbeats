@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,7 @@ from .. import config
 from ..artwork import extract_artwork, save_artwork
 from ..database import get_db
 from ..models import Track
+from ..objectstore import artwork_key, audio_key, store
 from ..schemas import DurationReport, Facets, GroupCount, Stats, TrackOut, TrackPage, TrackUpdate
 from ..streaming import guess_mime
 
@@ -208,6 +209,28 @@ def upload_track(
     except Exception as exc:  # noqa: BLE001
         log.warning("artwork extraction failed for %s: %s", stored_name, exc)
 
+    # ---- copy to object storage so the upload survives a redeploy -----------
+    # The local file stays as the source of truth for this process; if the copy
+    # fails the track is still playable, just not durable.
+    backend = "local"
+    if config.USES_OBJECT_STORAGE:
+        try:
+            mime = file.content_type or guess_mime(destination, "audio/mpeg")
+            if store.put(audio_key(stored_name), destination.read_bytes(), mime):
+                backend = "supabase"
+                if artwork_path:
+                    art_file = config.ARTWORK_DIR / artwork_path
+                    if art_file.is_file():
+                        store.put(
+                            artwork_key(artwork_path),
+                            art_file.read_bytes(),
+                            guess_mime(art_file, "image/jpeg"),
+                        )
+            else:
+                log.warning("Track %s kept on the ephemeral disk only.", stored_name)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("object storage upload failed for %s: %s", stored_name, exc)
+
     track = Track(
         title=(title or probed.get("title") or original.stem).strip(),
         artist=(artist or probed.get("artist") or "Unknown artist").strip(),
@@ -217,6 +240,7 @@ def upload_track(
         mime_type=file.content_type or "audio/mpeg",
         duration=duration,
         size_bytes=size,
+        storage_backend=backend,
         artwork_path=artwork_path,
         has_artwork=artwork_path is not None,
         attribution="Uploaded by a user of this library",
@@ -268,8 +292,12 @@ def delete_track(track_id: int, db: Session = Depends(get_db)):
     track = _get_track(track_id, db)
     if track.file_path:
         (config.MUSIC_DIR / track.file_path).unlink(missing_ok=True)
+        if track.storage_backend == "supabase":
+            store.delete(audio_key(track.file_path))
     if track.artwork_path:
         (config.ARTWORK_DIR / track.artwork_path).unlink(missing_ok=True)
+        if track.storage_backend == "supabase":
+            store.delete(artwork_key(track.artwork_path))
     db.delete(track)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -279,7 +307,14 @@ def delete_track(track_id: int, db: Session = Depends(get_db)):
 def get_artwork(track_id: int, db: Session = Depends(get_db)):
     track = _get_track(track_id, db)
 
-    # Normal path: artwork was extracted at upload time and is a plain file.
+    # Stored in the object store: send the client straight to it.
+    if track.storage_backend == "supabase" and track.artwork_path:
+        return RedirectResponse(
+            store.public_url(artwork_key(track.artwork_path)),
+            status_code=302,
+        )
+
+    # Normal local path: artwork was extracted at upload time.
     if track.artwork_path:
         path = config.ARTWORK_DIR / track.artwork_path
         if path.is_file():
@@ -290,7 +325,7 @@ def get_artwork(track_id: int, db: Session = Depends(get_db)):
             )
 
     # Self-healing path: an upload that predates artwork extraction. Extract it
-    # once, cache the file, and record the result so the next request is fast.
+    # once, cache the file (and copy it to the object store), then record it.
     if track.file_path:
         audio_file = config.MUSIC_DIR / track.file_path
         if audio_file.is_file():
@@ -299,6 +334,8 @@ def get_artwork(track_id: int, db: Session = Depends(get_db)):
                 data, mime = found
                 track.artwork_path = save_artwork(config.ARTWORK_DIR, data, mime)
                 track.has_artwork = True
+                if config.USES_OBJECT_STORAGE:
+                    store.put(artwork_key(track.artwork_path), data, mime)
                 db.commit()
                 log.info("Extracted artwork for track %s", track_id)
                 return Response(

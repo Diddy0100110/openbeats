@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from .. import config
 from ..database import get_db
 from ..models import Track
+from ..objectstore import audio_key, store
 from ..streaming import proxy_remote, serve_local_file
 
 router = APIRouter(tags=["stream"])
@@ -19,6 +21,11 @@ async def stream(track_id: int, request: Request, db: Session = Depends(get_db))
         raise HTTPException(status_code=404, detail=f"Track {track_id} not found")
 
     range_header = request.headers.get("range")
+
+    # Uploaded to the object store: let the client stream from there, which keeps
+    # this (small, free) instance out of the data path.
+    if track.storage_backend == "supabase" and track.file_path:
+        return RedirectResponse(store.public_url(audio_key(track.file_path)), status_code=302)
 
     if track.file_path:
         path = config.MUSIC_DIR / track.file_path

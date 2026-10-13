@@ -54,9 +54,12 @@ def _database_url() -> str:
     raw = (os.getenv("DATABASE_URL") or "").strip()
     if not raw:
         return f"sqlite:///{DB_PATH.as_posix()}"
-    # Render/Heroku hand out `postgres://`, SQLAlchemy 2 wants `postgresql://`
+    # Render/Heroku hand out `postgres://`, and SQLAlchemy wants an explicit
+    # driver. psycopg 3 is used because its wheels bundle libpq.
     if raw.startswith("postgres://"):
         raw = "postgresql://" + raw[len("postgres://") :]
+    if raw.startswith("postgresql://"):
+        raw = "postgresql+psycopg://" + raw[len("postgresql://") :]
     return raw
 
 
@@ -90,3 +93,13 @@ SEED_PROBE_DURATION = (
 
 # Seconds to wait for a remote audio host before giving up.
 UPSTREAM_TIMEOUT = float(os.getenv("UPSTREAM_TIMEOUT", "30"))
+
+# ---------------------------------------------------------------------------
+# Object storage (Supabase) — keeps uploads alive across deploys
+# ---------------------------------------------------------------------------
+SUPABASE_URL = (os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
+SUPABASE_SERVICE_KEY = (os.getenv("SUPABASE_SERVICE_KEY") or "").strip()
+SUPABASE_BUCKET = (os.getenv("SUPABASE_BUCKET") or "openbeats").strip()
+
+# When unset, uploads are written to the local disk (fine for development).
+USES_OBJECT_STORAGE = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)

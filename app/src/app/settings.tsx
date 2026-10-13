@@ -1,7 +1,9 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { api } from '@/api/client';
 
 import { Icon } from '@/components/Icon';
 import { Input } from '@/components/Input';
@@ -28,6 +30,29 @@ export default function SettingsScreen() {
   const [value, setValue] = useState(getApiBase());
   const [probe, setProbe] = useState<Probe>({ state: 'idle' });
   const [saved, setSaved] = useState(false);
+  const [storage, setStorage] = useState<{
+    backend: string;
+    database: string;
+    durable: boolean;
+    bucket?: string;
+  } | null>(null);
+
+  // Ask the API where uploads actually land, so the durability of someone's
+  // music is visible rather than implied.
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .storageStatus()
+      .then((result) => {
+        if (!cancelled) setStorage(result);
+      })
+      .catch(() => {
+        if (!cancelled) setStorage(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [saved]);
 
   const dirty = normaliseBase(value) !== getApiBase();
 
@@ -206,8 +231,34 @@ export default function SettingsScreen() {
           ) : null}
         </View>
 
-        <Text style={[styles.section, { color: theme.textSecondary }]}>ABOUT</Text>
+        <Text style={[styles.section, { color: theme.textSecondary }]}>STORAGE</Text>
         <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={styles.status}>
+            <View
+              style={[
+                styles.dot,
+                { backgroundColor: storage?.durable ? theme.primary : theme.danger },
+              ]}
+            />
+            <Text
+              style={[
+                styles.statusText,
+                { color: storage?.durable ? theme.text : theme.danger },
+              ]}>
+              {storage
+                ? storage.durable
+                  ? 'Uploads are stored permanently, so they survive a redeploy.'
+                  : 'Uploads are temporary: they are erased whenever the server is redeployed.'
+                : 'Checking storage…'}
+            </Text>
+          </View>
+          <Text style={[styles.hint, { color: theme.textMuted }]}>
+            Files: {storage?.backend ?? '—'} · Database: {storage?.database ?? '—'}
+            {storage?.bucket ? ` · Bucket: ${storage.bucket}` : ''}
+          </Text>
+        </View>
+
+        <Text style={[styles.section, { color: theme.textSecondary }]}>ABOUT</Text>        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Text style={[styles.cardText, { color: theme.textSecondary }]}>
             OpenBeats · a shared, account-less music library. The demo catalogue contains public-domain
             and Creative Commons recordings streamed from the Internet Archive.

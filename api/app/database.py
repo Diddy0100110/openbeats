@@ -63,7 +63,12 @@ def _add_missing_columns() -> None:
     """
     from sqlalchemy import inspect, text
 
-    wanted = {"tracks": {"artwork_path": "VARCHAR(300)"}}
+    wanted = {
+        "tracks": {
+            "artwork_path": "VARCHAR(300)",
+            "storage_backend": "VARCHAR(20) DEFAULT 'local'",
+        }
+    }
 
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())

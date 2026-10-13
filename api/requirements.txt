@@ -5,3 +5,7 @@ pydantic>=2.9
 python-multipart>=0.0.12
 mutagen>=1.47
 httpx>=0.27
+
+# Postgres driver, for when DATABASE_URL points at Supabase/Render Postgres.
+# The binary wheel bundles libpq, so no system packages are needed.
+psycopg[binary]>=3.2

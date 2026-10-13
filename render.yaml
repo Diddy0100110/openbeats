@@ -27,10 +27,21 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.10"
+      # --- Durable storage ---------------------------------------------------
+      # With a Postgres DATABASE_URL plus a Supabase bucket, uploads survive
+      # deploys. `sync: false` makes Render prompt for the value instead of
+      # storing it in this (public) repository.
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: openbeats
       # NOTE: DATA_DIR is deliberately *not* set. On the free plan /data does not
       # exist and is not writable, so the app uses a directory inside the project
-      # (ephemeral, but it works). Once you attach a disk mounted at /data,
-      # uncomment the line below.
+      # (a scratch area for uploads that are being pushed to the bucket).
       # - key: DATA_DIR
       #   value: /data
       - key: SEED_DEMO

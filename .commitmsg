@@ -1,19 +1,26 @@
-Redesign the app around the light reference layout
+Store uploads in Supabase so they survive deploys
 
-- Light theme, pinned via LOCKED_SCHEME, with a violet accent
-- Navigation moves to a top tab strip (expo-router/ui) instead of a bottom bar
-- Mini player redesigned: artwork, title, previous/play/next on a floating card
-- Track rows use a thumbnail plus a round plus-button that opens the track sheet
-- Playlists render as a two-column grid, like the reference
-- Player screen restructured around the new artwork/progress/controls layout
+The free Render plan has an ephemeral filesystem, so every deploy erased the
+user's uploads (and, with SQLite, the whole library). This adds an optional
+Supabase backend:
 
-Two implementation notes worth keeping:
+- app/objectstore.py wraps the Supabase Storage REST API (create bucket, put,
+  delete, public URL). No SDK needed.
+- Uploads are written to the local disk for the life of the process *and* copied
+  to the bucket. Only a successful copy sets storage_backend="supabase".
+- /api/stream and /tracks/{id}/artwork 302-redirect to the public bucket URL for
+  those tracks, which keeps this small instance out of the data path and still
+  gives Range support (Supabase serves it).
+- Deleting a track also deletes both objects.
+- DATABASE_URL now normalises to postgresql+psycopg, and psycopg[binary] is a
+  dependency, so metadata can live in Supabase Postgres instead of the ephemeral
+  SQLite file.
+- render.yaml declares DATABASE_URL / SUPABASE_URL / SUPABASE_SERVICE_KEY with
+  sync: false, so Render prompts for them rather than storing secrets in the
+  public repository.
+- GET /api/storage/status reports whether uploads are actually durable, and the
+  app's Settings screen shows it, so this is visible instead of assumed.
 
-* expo-router/ui discovers screens by reading the layout's own JSX, so the
-  TabTrigger elements must be declared in (tabs)/_layout.tsx. Extracting them
-  into a component makes the navigator throw "couldn't find any screens".
-* A child of <TabList asChild> / <TabTrigger asChild> goes through a Slot, which
-  rejects an array of styles. Those styles are flattened with StyleSheet.flatten.
-
-Verified in the browser: inactive tabs are display:none (no overlap), the strip
-renders white, and Home/Search/Playlists each render their own content.
+Verified locally with storage disabled (health reports files:"local", full
+upload/stream/artwork/delete cycle passes) and the Postgres DDL compiles for the
+psycopg dialect without a server.

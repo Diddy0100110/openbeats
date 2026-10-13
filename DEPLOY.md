@@ -127,6 +127,53 @@ novos, reconstrói com o `EXPO_PUBLIC_API_URL` correto (Passo 3).
 
 ---
 
+## Passo 5 — (Recomendado) Armazenamento permanente com Supabase
+
+No plano gratuito do Render o disco é **efémero**: cada deploy apaga os uploads e, se estiveres a
+usar SQLite, também a biblioteca. A solução gratuita e permanente é guardar tudo no **Supabase**.
+
+### 5.1 Criar o projeto
+
+1. Cria conta em <https://supabase.com> (grátis, sem cartão)
+2. **New project** → escolhe um nome e uma password para a base de dados → **Create**
+3. Espera ~2 minutos
+
+### 5.2 Copiar os três valores
+
+| Onde | O que copiar |
+| --- | --- |
+| **Project Settings → Database → Connection string → URI** | `DATABASE_URL` — troca `[YOUR-PASSWORD]` pela password que escolheste |
+| **Project Settings → API → Project URL** | `SUPABASE_URL` (ex.: `https://abcdefgh.supabase.co`) |
+| **Project Settings → API → Project API keys → `service_role`** | `SUPABASE_SERVICE_KEY` |
+
+> 🔐 O `service_role` ignora as regras de acesso. Trata-o como uma password e nunca o ponhas no
+> GitHub — no `render.yaml` ele está marcado com `sync: false` exatamente para isso.
+
+### 5.3 Aplicar no Render
+
+1. No painel do Render, entra no Blueprint **openbeats** → **`Manual sync`**
+2. O Render vai pedir os três valores novos → cola-os → confirma
+3. Espera pelo deploy. Nos logs deves ver:
+   ```
+   Files    : supabase bucket 'openbeats'
+   Created Supabase bucket 'openbeats'
+   ```
+
+O bucket é criado automaticamente. A partir daí **os uploads sobrevivem a todos os deploys**.
+
+### 5.4 Confirmar
+
+Abre `/api/health` — deve dizer `"files":"supabase"`:
+
+```
+https://openbeats-api.onrender.com/api/health
+```
+
+Ou, dentro do app, em **⚙️ Definições → STORAGE**: deve aparecer a verde
+*"Uploads are stored permanently"*.
+
+---
+
 ## Resolução de problemas
 
 **"Can't reach the library" no site**

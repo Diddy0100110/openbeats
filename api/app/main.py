@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 
 from . import config
 from .database import init_db
+from .objectstore import store
 from .routers import playlists, stream, tracks
 from .schemas import Health
 from .seed import seed_on_startup
@@ -34,8 +35,16 @@ async def lifespan(app: FastAPI):
     log.info("Starting %s v%s", config.APP_NAME, config.APP_VERSION)
     log.info("Data dir : %s", config.DATA_DIR)
     log.info("Database : %s", config.DATABASE_URL.rsplit("@", 1)[-1])
+    log.info(
+        "Files    : %s",
+        f"supabase bucket '{config.SUPABASE_BUCKET}'" if config.USES_OBJECT_STORAGE else "local disk",
+    )
 
     init_db()
+
+    # Make sure the storage bucket exists; harmless when storage is disabled.
+    if config.USES_OBJECT_STORAGE:
+        await asyncio.to_thread(store.ensure_bucket)
 
     app.state.http = httpx.AsyncClient(
         timeout=httpx.Timeout(config.UPSTREAM_TIMEOUT, connect=10.0),
@@ -105,7 +114,18 @@ def health() -> Health:
         app=config.APP_NAME,
         version=config.APP_VERSION,
         storage="sqlite" if config.IS_SQLITE else "postgres",
+        files="supabase" if config.USES_OBJECT_STORAGE else "local",
     )
+
+
+@app.get("/api/storage/status", tags=["meta"], summary="Where uploads are stored")
+def storage_status() -> dict:
+    """Used by the Settings screen to show whether uploads are durable."""
+    return {
+        **store.status(),
+        "database": "sqlite" if config.IS_SQLITE else "postgres",
+        "durable": config.USES_OBJECT_STORAGE and not config.IS_SQLITE,
+    }
 
 
 @app.exception_handler(Exception)
