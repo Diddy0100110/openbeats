@@ -1,0 +1,42 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Deploy: push this repository to GitHub, then in Render choose
+#   New +  ->  Blueprint  ->  pick the repository.
+#
+# Notes
+# -----
+# * The free plan has an **ephemeral** filesystem, so SQLite and uploaded MP3s
+#   are reset on every deploy or restart. The demo catalogue simply re-seeds
+#   itself (~1 s), which is fine for sharing a link. To *persist uploads*,
+#   upgrade to a paid instance and uncomment the `disk:` block.
+# * Free instances also spin down after ~15 minutes of inactivity; the first
+#   request afterwards takes a few seconds to wake up.
+# * `api/Dockerfile` is provided as an alternative if you prefer a container.
+
+services:
+  - type: web
+    name: openbeats-api
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: api
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.10"
+      - key: DATA_DIR
+        value: /data
+      - key: SEED_DEMO
+        value: "true"
+      - key: MAX_UPLOAD_MB
+        value: "200"
+      - key: CORS_ORIGINS
+        value: "*"
+    # Uncomment both lines after upgrading to a paid plan to persist data:
+    # disk:
+    #   name: openbeats-data
+    #   mountPath: /data
+    #   sizeGB: 5

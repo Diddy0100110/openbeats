@@ -1,0 +1,1 @@
+"""OpenBeats API package."""
