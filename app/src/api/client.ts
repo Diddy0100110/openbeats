@@ -21,9 +21,35 @@ export class ApiError extends Error {
   }
 }
 
-const DEFAULT_TIMEOUT = 20_000;
+/**
+ * Turn an error into something a person can act on. A free-tier server that has
+ * gone to sleep is by far the most common failure, so it gets a specific hint
+ * rather than a generic "request failed".
+ */
+export function describeError(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 0 || error.status === 408) {
+      return 'The server did not answer. On the free plan it sleeps when idle and can take up to a minute to wake up — tap Try again.';
+    }
+    return error.message;
+  }
+  return error instanceof Error ? error.message : 'Something went wrong.';
+}
 
-async function request<T>(path: string, init: RequestInit = {}, timeout = DEFAULT_TIMEOUT): Promise<T> {
+const DEFAULT_TIMEOUT = 40_000;
+/** A cold Render instance needs longer than a warm one to answer. */
+const WAKE_UP_TIMEOUT = 75_000;
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Methods that are safe to send twice. */
+const IDEMPOTENT = new Set(['GET', 'HEAD']);
+
+async function fetchOnce<T>(
+  path: string,
+  init: RequestInit,
+  timeout: number,
+): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
 
@@ -55,12 +81,37 @@ async function request<T>(path: string, init: RequestInit = {}, timeout = DEFAUL
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new ApiError(408, 'The API took too long to respond.');
+      throw new ApiError(408, 'The server is taking too long to answer.');
     }
-    throw new ApiError(0, `Cannot reach the API at ${getApiBase()}. Is it running?`);
+    throw new ApiError(0, `Cannot reach the API at ${getApiBase()}.`);
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  timeout = DEFAULT_TIMEOUT,
+): Promise<T> {
+  const method = (init.method ?? 'GET').toUpperCase();
+  const attempts = IDEMPOTENT.has(method) ? 2 : 1;
+  let lastError: unknown = new ApiError(0, 'Request failed');
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      // The second attempt gets the longer "the instance was asleep" budget.
+      return await fetchOnce<T>(path, init, attempt === 1 ? timeout : WAKE_UP_TIMEOUT);
+    } catch (error) {
+      lastError = error;
+
+      // Real HTTP errors are final; only transport problems are worth retrying.
+      if (error instanceof ApiError && error.status !== 0 && error.status !== 408) throw error;
+      if (attempt < attempts) await delay(700);
+    }
+  }
+
+  throw lastError;
 }
 
 function query(params: Record<string, string | number | undefined | null>): string {
@@ -86,7 +137,12 @@ export const api = {
     return getApiBase();
   },
 
-  health: () => request<{ status: string; app: string; version: string; storage: string }>('/api/health', {}, 8000),
+  health: () =>
+    request<{ status: string; app: string; version: string; storage: string }>(
+      '/api/health',
+      {},
+      60_000,
+    ),
 
   stats: () => request<Stats>('/api/tracks/stats'),
 

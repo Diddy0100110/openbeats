@@ -11,6 +11,7 @@ import {
 
 import {
   api,
+  describeError,
   type Facets,
   type Playlist,
   type PlaylistDetail,
@@ -109,7 +110,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         setStatus('ready');
       } catch (cause) {
         if (cancelled) return;
-        setError(cause instanceof Error ? cause.message : 'Could not load the library.');
+        setError(describeError(cause));
         setStatus('error');
       }
     };
