@@ -32,7 +32,16 @@ class ObjectStore:
         return bool(self.url and self.service_key)
 
     def _headers(self, content_type: str | None = None) -> dict[str, str]:
-        headers = {"Authorization": f"Bearer {self.service_key}"}
+        """Auth headers for the Storage REST API.
+
+        Supabase accepts the key on `apikey`, and legacy JWT keys on
+        `Authorization: Bearer`. New `sb_secret_…` keys are *not* JWTs, so both
+        headers are sent — that way either key type works.
+        """
+        headers = {
+            "apikey": self.service_key,
+            "Authorization": f"Bearer {self.service_key}",
+        }
         if content_type:
             headers["Content-Type"] = content_type
         return headers

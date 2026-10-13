@@ -1,26 +1,19 @@
-Store uploads in Supabase so they survive deploys
+Support Supabase's new API key format
 
-The free Render plan has an ephemeral filesystem, so every deploy erased the
-user's uploads (and, with SQLite, the whole library). This adds an optional
-Supabase backend:
+Reading the current Supabase docs turned up two things that would have broken
+the setup:
 
-- app/objectstore.py wraps the Supabase Storage REST API (create bucket, put,
-  delete, public URL). No SDK needed.
-- Uploads are written to the local disk for the life of the process *and* copied
-  to the bucket. Only a successful copy sets storage_backend="supabase".
-- /api/stream and /tracks/{id}/artwork 302-redirect to the public bucket URL for
-  those tracks, which keeps this small instance out of the data path and still
-  gives Range support (Supabase serves it).
-- Deleting a track also deletes both objects.
-- DATABASE_URL now normalises to postgresql+psycopg, and psycopg[binary] is a
-  dependency, so metadata can live in Supabase Postgres instead of the ephemeral
-  SQLite file.
-- render.yaml declares DATABASE_URL / SUPABASE_URL / SUPABASE_SERVICE_KEY with
-  sync: false, so Render prompts for them rather than storing secrets in the
-  public repository.
-- GET /api/storage/status reports whether uploads are actually durable, and the
-  app's Settings screen shows it, so this is visible instead of assumed.
+1. There is no longer a "Settings > API" page — keys now live under
+   "Settings > API Keys". The URL I had been handing out returns 404, so the
+   instructions were unusable.
+2. anon/service_role JWTs are deprecated in favour of sb_publishable_… and
+   sb_secret_… keys, which are *not* JWTs and must be sent on the `apikey`
+   header. Sending only `Authorization: Bearer` would fail for them.
 
-Verified locally with storage disabled (health reports files:"local", full
-upload/stream/artwork/delete cycle passes) and the Postgres DDL compiles for the
-psycopg dialect without a server.
+ObjectStore now sends both `apikey` and `Authorization`, so either key type
+works. Also detects Supabase's transaction-mode pooler (port 6543 or
+pgbouncer=true) and disables psycopg 3 prepared statements for it, since that
+pooler cannot support them.
+
+Verified: pooler detection for all three URL shapes, engine still resolves to
+SQLite locally, and the generated auth headers/public URLs are correct.

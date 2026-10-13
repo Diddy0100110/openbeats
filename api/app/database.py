@@ -16,6 +16,9 @@ class Base(DeclarativeBase):
 connect_args: dict = {}
 if config.IS_SQLITE:
     connect_args = {"check_same_thread": False}
+elif config.USES_TRANSACTION_POOLER:
+    # psycopg 3: never prepare statements when behind a transaction pooler.
+    connect_args = {"prepare_threshold": None}
 
 engine = create_engine(
     config.DATABASE_URL,

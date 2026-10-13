@@ -66,6 +66,11 @@ def _database_url() -> str:
 DATABASE_URL = _database_url()
 IS_SQLITE = DATABASE_URL.startswith("sqlite")
 
+# Supabase hands out a transaction-mode pooler on port 6543, which cannot use
+# prepared statements. Detecting it lets the engine disable them instead of
+# failing with "prepared statement already exists".
+USES_TRANSACTION_POOLER = (":6543" in DATABASE_URL) or ("pgbouncer=true" in DATABASE_URL)
+
 # ---------------------------------------------------------------------------
 # Behaviour
 # ---------------------------------------------------------------------------
