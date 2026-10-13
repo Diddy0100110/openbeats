@@ -28,6 +28,7 @@ def _prepare_data_dir() -> Path:
     for candidate in candidates:
         try:
             (candidate / "music").mkdir(parents=True, exist_ok=True)
+            (candidate / "artwork").mkdir(parents=True, exist_ok=True)
             probe = candidate / ".write-probe"
             probe.write_text("ok", encoding="utf-8")
             probe.unlink()
@@ -43,6 +44,7 @@ def _prepare_data_dir() -> Path:
 
 DATA_DIR = _prepare_data_dir()
 MUSIC_DIR = DATA_DIR / "music"
+ARTWORK_DIR = DATA_DIR / "artwork"
 DB_PATH = DATA_DIR / "library.db"
 
 # ---------------------------------------------------------------------------

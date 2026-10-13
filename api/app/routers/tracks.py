@@ -12,9 +12,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import config
+from ..artwork import extract_artwork, save_artwork
 from ..database import get_db
 from ..models import Track
 from ..schemas import DurationReport, Facets, GroupCount, Stats, TrackOut, TrackPage, TrackUpdate
+from ..streaming import guess_mime
 
 log = logging.getLogger("openbeats.tracks")
 
@@ -174,28 +176,37 @@ def upload_track(
 
     # ---- read what metadata we can -----------------------------------------
     duration = None
-    has_artwork = False
     probed: dict[str, str] = {}
+    artwork_path: str | None = None
+
     try:
         import mutagen
 
         audio = mutagen.File(destination)
-        if audio is not None:
-            duration = float(audio.info.length) if getattr(audio, "info", None) else None
-            easy = mutagen.File(destination, easy=True) or {}
+        if audio is not None and getattr(audio, "info", None) is not None:
+            duration = float(audio.info.length)
+
+        easy = mutagen.File(destination, easy=True)
+        if easy is not None:
             for key in ("title", "artist", "album", "genre"):
-                value = (easy.get(key) or [None])[0] if hasattr(easy, "get") else None
-                if value:
-                    probed[key] = str(value)
-            if isinstance(getattr(audio, "tags", None), dict):
-                has_artwork = any("APIC" in str(k) or "covr" in str(k) for k in audio.tags)
-            else:
-                has_artwork = any(
-                    k.startswith("APIC") or str(getattr(k, "FrameID", "")) == "APIC"
-                    for k in (audio.tags or {})
-                )
+                try:
+                    values = easy.get(key) or []
+                except Exception:  # noqa: BLE001 - some keys are unsupported per format
+                    continue
+                if values and str(values[0]).strip():
+                    probed[key] = str(values[0]).strip()
     except Exception as exc:  # noqa: BLE001
         log.warning("metadata probe failed for %s: %s", stored_name, exc)
+
+    # Cover art is extracted once, here, so the API can later serve it as a
+    # plain cacheable file instead of re-parsing tags on every request.
+    try:
+        found = extract_artwork(destination)
+        if found:
+            data, mime = found
+            artwork_path = save_artwork(config.ARTWORK_DIR, data, mime)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("artwork extraction failed for %s: %s", stored_name, exc)
 
     track = Track(
         title=(title or probed.get("title") or original.stem).strip(),
@@ -206,7 +217,8 @@ def upload_track(
         mime_type=file.content_type or "audio/mpeg",
         duration=duration,
         size_bytes=size,
-        has_artwork=has_artwork,
+        artwork_path=artwork_path,
+        has_artwork=artwork_path is not None,
         attribution="Uploaded by a user of this library",
     )
     db.add(track)
@@ -256,6 +268,8 @@ def delete_track(track_id: int, db: Session = Depends(get_db)):
     track = _get_track(track_id, db)
     if track.file_path:
         (config.MUSIC_DIR / track.file_path).unlink(missing_ok=True)
+    if track.artwork_path:
+        (config.ARTWORK_DIR / track.artwork_path).unlink(missing_ok=True)
     db.delete(track)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -264,26 +278,38 @@ def delete_track(track_id: int, db: Session = Depends(get_db)):
 @router.get("/{track_id}/artwork", summary="Embedded cover art (404 when there is none)")
 def get_artwork(track_id: int, db: Session = Depends(get_db)):
     track = _get_track(track_id, db)
-    if not track.file_path or not track.has_artwork:
-        raise HTTPException(status_code=404, detail="This track has no embedded artwork")
 
-    path = config.MUSIC_DIR / track.file_path
-    try:
-        import mutagen
+    # Normal path: artwork was extracted at upload time and is a plain file.
+    if track.artwork_path:
+        path = config.ARTWORK_DIR / track.artwork_path
+        if path.is_file():
+            return Response(
+                content=path.read_bytes(),
+                media_type=guess_mime(path, "image/jpeg"),
+                headers={"Cache-Control": "public, max-age=604800"},
+            )
 
-        audio = mutagen.File(path)
-        picture = None
-        for key in (audio.tags or {}):
-            frame_id = str(getattr(key, "FrameID", key))
-            if frame_id == "APIC":
-                picture = audio.tags[key]
-                break
-            if key == "covr" and audio.tags[key]:
-                data = bytes(audio.tags[key][0])
-                return Response(content=data, media_type="image/jpeg")
-        if picture is not None:
-            return Response(content=bytes(picture.data), media_type=picture.mime or "image/jpeg")
-    except Exception as exc:  # noqa: BLE001
-        log.warning("artwork extraction failed for track %s: %s", track_id, exc)
+    # Self-healing path: an upload that predates artwork extraction. Extract it
+    # once, cache the file, and record the result so the next request is fast.
+    if track.file_path:
+        audio_file = config.MUSIC_DIR / track.file_path
+        if audio_file.is_file():
+            found = extract_artwork(audio_file)
+            if found:
+                data, mime = found
+                track.artwork_path = save_artwork(config.ARTWORK_DIR, data, mime)
+                track.has_artwork = True
+                db.commit()
+                log.info("Extracted artwork for track %s", track_id)
+                return Response(
+                    content=data,
+                    media_type=mime,
+                    headers={"Cache-Control": "public, max-age=604800"},
+                )
 
-    raise HTTPException(status_code=404, detail="Artwork could not be read")
+        # Definitive answer: there is genuinely no artwork in this file.
+        if track.has_artwork:
+            track.has_artwork = False
+            db.commit()
+
+    raise HTTPException(status_code=404, detail="This track has no embedded artwork")

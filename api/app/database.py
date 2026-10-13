@@ -51,3 +51,30 @@ def init_db() -> None:
     from . import models  # noqa: F401  (register mappers)
 
     Base.metadata.create_all(bind=engine)
+    _add_missing_columns()
+
+
+def _add_missing_columns() -> None:
+    """Apply tiny additive migrations.
+
+    ``create_all`` only creates missing *tables*, so a column added after the
+    first release has to be patched in by hand. This project has no migration
+    tool, and for additive changes an ``ALTER TABLE`` is enough.
+    """
+    from sqlalchemy import inspect, text
+
+    wanted = {"tracks": {"artwork_path": "VARCHAR(300)"}}
+
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+
+    for table, columns in wanted.items():
+        if table not in existing_tables:
+            continue
+        present = {column["name"] for column in inspector.get_columns(table)}
+        missing = {name: ddl for name, ddl in columns.items() if name not in present}
+        if not missing:
+            continue
+        with engine.begin() as connection:
+            for name, ddl in missing.items():
+                connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))

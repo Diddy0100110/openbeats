@@ -41,6 +41,8 @@ class Track(Base):
 
     mime_type: Mapped[str] = mapped_column(String(100), default="audio/mpeg")
     size_bytes: Mapped[int | None] = mapped_column(Integer)
+    # Cover art extracted at upload time, stored as its own file.
+    artwork_path: Mapped[str | None] = mapped_column(String(300))
     has_artwork: Mapped[bool] = mapped_column(default=False)
     lyrics: Mapped[str | None] = mapped_column(Text)
     # e.g. "Kevin MacLeod — incompetech.com — CC BY 4.0"
