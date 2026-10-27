@@ -1,20 +1,18 @@
-Stop declaring DATABASE_URL in the Blueprint so it can be set in the dashboard
+﻿Boot even when the database is unreachable
 
-The value never reached the app: the boot log kept saying
-"Database : sqlite:////opt/render/project/src/api/data/library.db" and the
-service's Environment page showed the key missing, even though the same edit
-happily deleted DATA_DIR.
+The API stopped answering entirely: /api/health returned zero bytes until the
+client timed out. init_db() ran synchronously in the lifespan, so a failed
+connection raised before uvicorn began listening - the platform health check
+never got an answer and the site just hung, with the real cause visible only in
+the logs.
 
-Cause: a key declared in render.yaml is *managed by the Blueprint*, and Render
-discards values typed into the dashboard for managed keys. `sync: false` only
-prompts during the initial Blueprint creation, so there is no way to supply it
-afterwards — the key was unusable.
+- init_db_safe() catches the failure, logs it, and lets startup continue
+- connect_timeout=10 so an unreachable host fails fast instead of hanging
+- /api/storage/status now reports database_ready + database_error
+- a background task retries the schema every 30s, so a resumed database heals
+  itself without a redeploy
+- the startup banner states where files really go (it claimed "local disk"
+  even when blobs were stored in Postgres)
 
-DATABASE_URL is now absent from render.yaml, with a comment explaining why and
-what to set in Dashboard -> service -> Environment. DEPLOY.md step 5.3 documents
-the corrected procedure.
-
-Verified end to end against a real Supabase Postgres beforehand: seeded the
-catalogue, uploaded a track with cover art, streamed a byte range, then deleted
-the whole local data/ directory and restarted — the track still listed, streamed
-(206, 0-4095/1523659) and served its artwork.
+Verified against a bogus tenant: the server boots, /api/health answers in 2.3s
+and /api/storage/status returns durable=false with "tenant/user ... not found".

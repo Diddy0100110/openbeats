@@ -1,12 +1,15 @@
 """SQLAlchemy engine/session wiring."""
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from . import config
+
+log = logging.getLogger("openbeats.database")
 
 
 class Base(DeclarativeBase):
@@ -16,9 +19,14 @@ class Base(DeclarativeBase):
 connect_args: dict = {}
 if config.IS_SQLITE:
     connect_args = {"check_same_thread": False}
-elif config.USES_TRANSACTION_POOLER:
-    # psycopg 3: never prepare statements when behind a transaction pooler.
-    connect_args = {"prepare_threshold": None}
+else:
+    # Never wait forever on a database that is suspended, deleted or otherwise
+    # unreachable: give up after 10s so the worker still boots and can report
+    # the problem instead of hanging with no answer at all.
+    connect_args = {"connect_timeout": 10}
+    if config.USES_TRANSACTION_POOLER:
+        # psycopg 3: never prepare statements when behind a transaction pooler.
+        connect_args["prepare_threshold"] = None
 
 engine = create_engine(
     config.DATABASE_URL,
@@ -55,6 +63,24 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _add_missing_columns()
+
+
+def init_db_safe() -> str | None:
+    """Create/upgrade the schema, swallowing connection failures.
+
+    A database that is down must not stop the process from booting: when the
+    schema step raises during startup, the worker never begins listening, the
+    platform health check gets no answer, and the whole site simply hangs with
+    no explanation. Returning the message instead lets the API answer and say
+    *why* it has no storage.
+    """
+    try:
+        init_db()
+        return None
+    except Exception as exc:  # pragma: no cover - depends on the environment
+        first_line = (str(exc).splitlines() or ["unknown error"])[0]
+        log.error("Database unavailable: %s", first_line)
+        return first_line[:300]
 
 
 def _add_missing_columns() -> None:

@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import config
-from .database import init_db
+from .database import init_db, init_db_safe
 from .objectstore import store
 from .routers import playlists, stream, tracks
 from .schemas import Health
@@ -28,6 +28,26 @@ logging.basicConfig(
 log = logging.getLogger("openbeats")
 
 _seed_task: asyncio.Task | None = None
+_db_retry_task: asyncio.Task | None = None
+
+
+async def _retry_database(app: FastAPI, delay: float = 30.0) -> None:
+    """Retry the schema step until the database answers.
+
+    Keeps a temporary outage self-healing: as soon as the database comes back
+    (a paused project resumed, a bad URL corrected) the tables are created and
+    the API reports itself healthy again.
+    """
+    while True:
+        await asyncio.sleep(delay)
+        try:
+            await asyncio.to_thread(init_db)
+        except Exception as exc:  # pragma: no cover - depends on the environment
+            log.warning("Database still unreachable: %s", str(exc).splitlines()[0][:200])
+            continue
+        app.state.db_error = None
+        log.info("Database reachable again - schema is ready")
+        return
 
 
 @asynccontextmanager
@@ -37,10 +57,21 @@ async def lifespan(app: FastAPI):
     log.info("Database : %s", config.DATABASE_URL.rsplit("@", 1)[-1])
     log.info(
         "Files    : %s",
-        f"supabase bucket '{config.SUPABASE_BUCKET}'" if config.USES_OBJECT_STORAGE else "local disk",
+        f"supabase bucket '{config.SUPABASE_BUCKET}'"
+        if config.USES_OBJECT_STORAGE
+        else "database (blobs in Postgres)"
+        if config.STORES_AUDIO_IN_DATABASE
+        else "local disk",
     )
 
-    init_db()
+    global _db_retry_task
+    app.state.db_error = init_db_safe()
+    if app.state.db_error:
+        log.error(
+            "Serving WITHOUT persistence - the database is unreachable. "
+            "Check DATABASE_URL / that the project is running."
+        )
+        _db_retry_task = asyncio.create_task(_retry_database(app))
 
     # Make sure the storage bucket exists; harmless when storage is disabled.
     if config.USES_OBJECT_STORAGE:
@@ -63,6 +94,8 @@ async def lifespan(app: FastAPI):
     finally:
         if _seed_task and not _seed_task.done():
             _seed_task.cancel()
+        if _db_retry_task and not _db_retry_task.done():
+            _db_retry_task.cancel()
         await app.state.http.aclose()
         log.info("Shutdown complete")
 
@@ -121,12 +154,15 @@ def health() -> Health:
 @app.get("/api/storage/status", tags=["meta"], summary="Where uploads are stored")
 def storage_status() -> dict:
     """Used by the Settings screen to show whether uploads are durable."""
+    error = getattr(app.state, "db_error", None)
     return {
         **store.status(),
         "backend": config.FILE_BACKEND,
         "database": "sqlite" if config.IS_SQLITE else "postgres",
+        "database_ready": error is None,
+        **({"database_error": error} if error else {}),
         # Postgres survives a redeploy, wherever the audio itself lives.
-        "durable": not config.IS_SQLITE,
+        "durable": (not config.IS_SQLITE) and error is None,
     }
 
 
